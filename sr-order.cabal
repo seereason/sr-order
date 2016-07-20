@@ -1,0 +1,38 @@
+name:               sr-order
+version:            0.34
+cabal-version:      >= 1.10
+build-type:         Simple
+license:            BSD3
+maintainer:         David Fox <dsf@seereason.com>
+homepage:           https://github.com/seereason/th-path
+bug-reports:        https://github.com/seereason/th-path/issues
+stability:          experimental
+synopsis:           A data structure to support lists in collaborative software
+description:
+  A data structure that combines a 'Map' @k@ @v@ with a list of
+  @k@, representing the element order.  This means the @[k]@ can be
+  reordered without invalidating any @k@ values that might be in use.
+  This is useful for collaborative systems where one person might
+  reorder a list while another person is modifying one of its
+  elements.
+
+library
+  hs-source-dirs: src
+  build-depends:
+    aeson,
+    base >= 4.8 && < 5,
+    containers,
+    lens,
+    ListLike,
+    safecopy,
+    template-haskell,
+    th-lift,
+    th-lift-instances,
+    web-routes-th
+  exposed-modules:
+    Data.Order
+  default-language: Haskell2010
+
+source-repository head
+  type:     git
+  location: git://github.com/seereason/sr-order.git
