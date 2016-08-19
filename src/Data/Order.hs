@@ -47,6 +47,7 @@ module Data.Order
     , lens_omat
     -- * Path Type
     , Path_OMap(Path_OMap, Path_At)
+    , omapPaths
     ) where
 
 import Control.Lens (Traversal', _Just, lens, Lens', view)
