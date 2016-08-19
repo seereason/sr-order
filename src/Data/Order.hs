@@ -25,7 +25,7 @@ module Data.Order
     , deriveOrder
 #endif
     -- * Query
-    , view
+    , Data.Order.view
     , view'
     , toPairs
     , toList
@@ -49,7 +49,7 @@ module Data.Order
     , Path_OMap(Path_OMap, Path_At)
     ) where
 
-import Control.Lens (Traversal', _Just, lens)
+import Control.Lens (Traversal', _Just, lens, Lens', view)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Data (Data)
 import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
@@ -179,7 +179,7 @@ instance (Ord k, Enum k, Monoid (Order k a)) => LL.FoldableLL (Order k a) a wher
 
 -- | Remove the element at k if present.
 deleteItem :: (Ord k, Enum k) => k -> Order k v -> Order k v
-deleteItem k m = maybe m snd (view k m)
+deleteItem k m = maybe m snd (Data.Order.view k m)
 
 -- | Put a new element at the end of the order, allocating a new key
 -- for it.
@@ -232,9 +232,12 @@ lens_omat k = lens getter setter . _Just
 
 -- | Like view, but discards the remainder list
 view' :: (Ord k, Enum k) => k -> Order k v -> v
-view' i m = maybe (error "Order.view'") fst (view i m)
+view' i m = maybe (error "Order.view'") fst (Data.Order.view i m)
 
 data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic, FromJSON, ToJSON)
+
+omapPaths :: (Ord k, Enum k) => Lens' a (Order k b) -> a -> [(k, c -> Path_OMap k c)]
+omapPaths lns a = map (\ (k, _) -> (k, Path_At k)) (toPairs (Control.Lens.view lns a))
 
 #if 0
 instance (Data k, Typeable k, Eq k, Ord k, Read k, Show k, Enum k,
