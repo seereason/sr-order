@@ -45,6 +45,9 @@ module Data.Order
     , asList
     -- * Lens
     , lens_omat
+    -- * Path Type
+    , Path_OMap(Path_OMap, Path_At)
+    , omapPaths
     ) where
 
 import Control.Lens (Traversal', _Just, lens, Lens', view)
@@ -232,6 +235,11 @@ lens_omat k = lens getter setter . _Just
 view' :: (Ord k, Enum k) => k -> Order k v -> v
 view' i m = maybe (error "Order.view'") fst (Data.Order.view i m)
 
+data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic, FromJSON, ToJSON)
+
+omapPaths :: (Ord k, Enum k) => Lens' a (Order k b) -> a -> [(k, c -> Path_OMap k c)]
+omapPaths lns a = map (\ (k, _) -> (k, Path_At k)) (toPairs (Control.Lens.view lns a))
+
 #if !__GHCJS__
 -- | Given the name of a type such as AbbrevPair, generate declarations
 -- @@
@@ -269,5 +277,7 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
                            next_ <- safeGet
                            return $ Order {elems = elems_, order = order_, next = next_}
 
+$(derivePathInfo ''Path_OMap)
+$(deriveSafeCopy 0 'base ''Path_OMap)
 $(deriveLiftMany [''Order])
 #endif
