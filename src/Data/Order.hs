@@ -45,9 +45,6 @@ module Data.Order
     , asList
     -- * Lens
     , lens_omat
-    -- * Path Type
-    , Path_OMap(Path_OMap, Path_At)
-    , omapPaths
     ) where
 
 import Control.Lens (Traversal', _Just, lens, Lens', view)
@@ -235,39 +232,6 @@ lens_omat k = lens getter setter . _Just
 view' :: (Ord k, Enum k) => k -> Order k v -> v
 view' i m = maybe (error "Order.view'") fst (Data.Order.view i m)
 
-data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic, FromJSON, ToJSON)
-
-omapPaths :: (Ord k, Enum k) => Lens' a (Order k b) -> a -> [(k, c -> Path_OMap k c)]
-omapPaths lns a = map (\ (k, _) -> (k, Path_At k)) (toPairs (Control.Lens.view lns a))
-
-#if 0
-instance (Data k, Typeable k, Eq k, Ord k, Read k, Show k, Enum k,
-          IsPath valuepath,
-          U (UType valuepath) (Order k (SType valuepath))
-         ) => IsPath (Path_OMap k valuepath) where
-    type UType (Path_OMap k valuepath) = UType valuepath
-    type SType (Path_OMap k valuepath) = Order k (SType valuepath)
-    idPath = Path_OMap
-    toLens (Path_At k p) = lens_omat k . toLens p
-    toLens _ = lens u (\s a -> maybe s id (unU' a))
-
-instance (IsPath (Path_OMap k v), Describe v, Describe (Proxy (SType (Path_OMap k v)))) => Describe (Path_OMap k v)
-    where describe' _f (_p@(Path_At _k _wp)) = maybe (describe' _f (Proxy :: Proxy (SType (Path_OMap k v)))) Just (describe' Nothing _wp)
-          describe' f p | p == idPath = describe' f (Proxy :: Proxy (SType (Path_OMap k v)))
-          describe' _ p = error ("Unexpected path: " ++ show p)
-
-instance (u ~ UType (UPath u a), a ~ SType (UPath u a),
-          U u (Order k a), PathStart u a,
-          Data k, Ord k, Enum k, Read k, Show k, FromJSON k, ToJSON k
-         ) => PathStart u (Order k a) where
-    type UPath u (Order k a) = Path_OMap k (UPath u a)
-    upeekRow _ (x@_xyz) = Node (Peek idPath Nothing) (concat [concatMap (makeRow x) (map (\(_k, _) -> Path_At _k) (toPairs _xyz))])
-    upeekTree _ (Just 0) (x@_xyz) = Node (Peek idPath (Just (u x))) []
-    upeekTree _ d (x@_xyz) = Node (Peek idPath Nothing) (concat [concatMap (makeTrees d x) (map (\(_k, _) -> Path_At _k) (toPairs _xyz))])
-    upeekCol _ (_p@(Path_At _k _q)) (x@_xyz) = Node (Peek idPath Nothing) (makeCol x (Path_At _k) (\(Path_At _ p) -> p) _p)
-    upeekCol _ _p (x@_xyz) = Node (Peek idPath (Just (u x))) []
-#endif
-
 #if !__GHCJS__
 -- | Given the name of a type such as AbbrevPair, generate declarations
 -- @@
@@ -301,7 +265,5 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
                            next_ <- safeGet
                            return $ Order {elems = elems_, order = order_, next = next_}
 
-$(derivePathInfo ''Path_OMap)
-$(deriveSafeCopy 0 'base ''Path_OMap)
 $(deriveLiftMany [''Order])
 #endif
