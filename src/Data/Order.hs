@@ -246,7 +246,11 @@ deriveOrder ityp t supers = do
   let idname = mkName (nameBase t ++ "ID")
       unname = mkName ("un" ++ nameBase t ++ "ID")
       mpname = mkName (nameBase t ++ "s")
+#if MIN_VERSION_template_haskell(2,11,0)
+  idtype <- newtypeD (cxt []) idname [] Nothing (recC idname [varStrictType unname (strictType notStrict ityp) ]) (sequence $ map conT $ [''Eq, ''Ord, ''Read, ''Show, ''Data, ''Typeable] ++ supers)
+#else
   idtype <- newtypeD (cxt []) idname [] (recC idname [varStrictType unname (strictType notStrict ityp) ]) ([''Eq, ''Ord, ''Read, ''Show, ''Data, ''Typeable] ++ supers)
+#endif
   insts <- [d| instance Enum $(conT idname) where
                  toEnum = $(conE idname) . toEnum
                  fromEnum = fromEnum . $(varE unname) |]
