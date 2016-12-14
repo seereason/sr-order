@@ -127,7 +127,7 @@ prepend a m = let k = next m in (m {next = succ k, elems = Map.insert k a (elems
 
 moveHead :: Int -> Order k v -> Order k v
 moveHead 0 m = m
-moveHead n (Order {order = (k : ks)}) =
+moveHead n m@(Order {order = (k : ks)}) =
     let (ks1, ks2) = splitAt n ks in m {order = ks1 ++ [k] ++ ks2}
 
 -- | Replace the current ordering with the given key list.  The
