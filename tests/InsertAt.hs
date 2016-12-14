@@ -9,8 +9,8 @@ import Data.List
 -- Then we need to permute the order list to what was last is now at position k.
 
 
-insertAt :: (Enum k, Ord k) => k -> v -> Order k v -> Order k v
-insertAt k v o = move z k o'
+insertAt :: (Enum k, Ord k) => Int -> v -> Order k v -> Order k v
+insertAt n v o = move z n o'
   where z = length (order o') - 1
         o' = appendItem v o
 
