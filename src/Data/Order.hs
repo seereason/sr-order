@@ -20,7 +20,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Data.Order
-    ( Order(..)
+    ( Order(..), elemsL, orderL, nextL
 #if !__GHCJS__
     , deriveOrder
 #endif
@@ -38,6 +38,7 @@ module Data.Order
     -- * Modification
     , putItem
     , insert
+    , append
     , prepend
     , moveHead
     , permute
@@ -52,7 +53,7 @@ module Data.Order
     , omapPaths
     ) where
 
-import Control.Lens (Traversal', _Just, lens, Lens', view)
+import Control.Lens (Traversal', _Just, lens, Lens', makeLensesFor, view)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Data (Data)
 import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
@@ -82,6 +83,8 @@ data Order k v =
           -- ^ Next available key
           }
     deriving (Data, Typeable, Generic)
+
+$(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 
 init :: Enum k => k
 init = toEnum 1            -- Yeah, that's right, 1.  F**k zeroth elements.
@@ -120,6 +123,11 @@ instance (Ord k, Show k, Show v) => Show (Order k v) where
 -- containing the new Order and the new key.
 insert :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)
 insert a m = let k = next m in (m {next = succ k, elems = Map.insert k a (elems m), order = order m ++ [k]}, k)
+{-# DEPRECATED insert "Use append" #-}
+
+-- | Better name than insert.
+append :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)
+append = insert
 
 -- | Put a new element at the beginning of the order
 prepend :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)

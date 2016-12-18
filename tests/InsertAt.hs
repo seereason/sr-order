@@ -41,3 +41,11 @@ shw :: (Show k, Show v) => Order k v -> String
 shw (Order es os n) = "Order { elems = " ++ show es ++ ", order = " ++ show os ++ ", next = " ++ show n ++ "}"
 
 
+-- | Put a new element at the beginning of the order
+prepend :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)
+prepend a m = let k = next m in (m {next = succ k, elems = Map.insert k a (elems m), order = k : order m}, k)
+
+moveHead :: Int -> Order k v -> Order k v
+moveHead 0 m = m
+moveHead n (m {order = (k : ks)}) =
+    let (ks1, ks2) = splitAt (n - 1) ks in m {order = ks1 ++ [k] ++ ks2}
