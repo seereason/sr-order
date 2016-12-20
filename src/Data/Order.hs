@@ -41,6 +41,7 @@ module Data.Order
     , append
     , prepend
     , moveHead
+    , insertAt
     , permute
     , deleteItem
     , appendItem
@@ -123,7 +124,7 @@ instance (Ord k, Show k, Show v) => Show (Order k v) where
 -- containing the new Order and the new key.
 insert :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)
 insert a m = let k = next m in (m {next = succ k, elems = Map.insert k a (elems m), order = order m ++ [k]}, k)
-{-# DEPRECATED insert "Use append" #-}
+{-# DEPRECATED insert "Renamed append" #-}
 
 -- | Better name than insert.
 append :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)
@@ -137,6 +138,10 @@ moveHead :: Int -> Order k v -> Order k v
 moveHead 0 m = m
 moveHead n m@(Order {order = (k : ks)}) =
     let (ks1, ks2) = splitAt n ks in m {order = ks1 ++ [k] ++ ks2}
+
+-- | Insert an element at the given position.
+insertAt :: (Enum k, Ord k) => Int -> v -> Order k v -> Order k v
+insertAt n v = moveHead n . fst . prepend v
 
 -- | Replace the current ordering with the given key list.  The
 -- result is a triple: (new, missing, invalid).  Missing pairs are
