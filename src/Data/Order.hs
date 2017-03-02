@@ -55,7 +55,7 @@ module Data.Order
     ) where
 
 import Control.Lens (Traversal', _Just, lens, Lens', makeLensesFor, view)
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (ToJSON(toJSON), FromJSON(parseJSON))
 import Data.Data (Data)
 import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
 import qualified Data.ListLike as LL
@@ -86,6 +86,12 @@ data Order k v =
     deriving (Data, Typeable, Generic)
 
 $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
+
+instance (Ord k, Enum k, ToJSON k, ToJSON v) => ToJSON (Order k v) where
+  toJSON = toJSON . toPairs
+
+instance (Ord k, Enum k, FromJSON k, FromJSON v) => FromJSON (Order k v) where
+  parseJSON = fmap fromPairs . parseJSON
 
 init :: Enum k => k
 init = toEnum 1            -- Yeah, that's right, 1.  F**k zeroth elements.
