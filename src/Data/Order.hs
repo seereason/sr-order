@@ -117,6 +117,7 @@ view k m = case Map.lookup k (elems m) of
 -- | Build an order from a list of (key, value) pairs.  No
 -- uniqueness check of the keys is performed.
 fromPairs :: (Ord k, Enum k) => [(k, v)] -> Order k v
+fromPairs [] = empty
 fromPairs prs =
     let ks = map fst prs in
     Order { elems = Map.fromList prs
