@@ -1,9 +1,9 @@
--- | A data structure that combines a 'Map' @k@ @v@ with a list of
--- @k@, representing the element order.  This means the @[k]@ can be
--- reordered without invalidating any @k@ values that might be in use.
--- This is useful for collaborative systems where one person might
--- reorder a list while another person is modifying one of its
--- elements.
+-- | The prototypical instance of OrderedMap, a data structure that
+-- combines a 'Map' @k@ @v@ with a list of @k@, representing the
+-- element order.  This means the @[k]@ can be reordered without
+-- invalidating any @k@ values that might be in use.  This is useful
+-- for collaborative systems where one person might reorder a list
+-- while another person is modifying one of its elements.
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
@@ -21,37 +21,12 @@
 
 module Data.Order
     ( Order(..), elemsL, orderL, nextL
+    , omapPaths
+    , Path_OMap(Path_OMap, Path_At)
 #if !__GHCJS__
     , deriveOrder
 #endif
-    -- * Query
-    , Data.Order.view
-    , view'
-    , toPairs
-    , toList
-    , find
-    -- * Construction
-    , init
-    , empty
-    , fromPairs
-    , fromList
-    -- * Modification
-    , putItem
-    , insert
-    , append
-    , prepend
-    , moveHead
-    , insertAt
-    , permute
-    , deleteItem
-    , appendItem
-    , insertItems
-    , asList
-    -- * Lens
-    , lens_omat
-    -- * Path Type
-    , Path_OMap(Path_OMap, Path_At)
-    , omapPaths
+    , module Data.OrderedMap
     ) where
 
 import Control.Lens (Traversal', _Just, lens, Lens', makeLensesFor, view)
@@ -61,6 +36,7 @@ import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
 import qualified Data.ListLike as LL
 import Data.Map as Map (Map, (!))
 import qualified Data.Map as Map
+import Data.OrderedMap
 import Data.Proxy (Proxy(Proxy))
 import Data.SafeCopy (SafeCopy(..), base, contain, deriveSafeCopy, safeGet, safePut)
 import Data.Tree (Tree(Node))
@@ -85,99 +61,33 @@ data Order k v =
           }
     deriving (Data, Typeable, Generic)
 
-$(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
+instance (Enum k, Ord k) => OrderedMap (Order k v) where
+    type OKey (Order k v) = k
+    type OValue (Order k v) = v
+    empty = Order mempty mempty (toEnum 0)
+    nextKey = next
+    toMap = elems
+    toKeys = order
+    newKey o = (next o, o {next = succ (next o)})
+    fromMapAndList mp ks = Order { elems = mp, order = ks, next = succ (maximum ks)}
+    fromMapListKey mp ks k = Order { elems = mp, order = ks, next = k}
+    fromPairs = foldr (\(k, v) o -> o {elems = Map.insert k v (elems o),
+                                       order = k : order o,
+                                       next = max (succ k) (next o)}) empty
+    toPairs o = let mp = toMap o in map (\k -> (k, mp ! k)) (toKeys o)
 
-instance (Ord k, Enum k, ToJSON k, ToJSON v) => ToJSON (Order k v) where
+instance (Ord k, Enum k, ToJSON k, Data v, ToJSON v) => ToJSON (Order k v) where
   toJSON = toJSON . toPairs
 
-instance (Ord k, Enum k, FromJSON k, FromJSON v) => FromJSON (Order k v) where
+instance (Ord k, Enum k, FromJSON k, Data v, FromJSON v) => FromJSON (Order k v) where
   parseJSON = fmap fromPairs . parseJSON
-
-init :: Enum k => k
-init = toEnum 1            -- Yeah, that's right, 1.  F**k zeroth elements.
-
--- | Return the an empty Order.
-empty :: (Ord k, Enum k) => Order k v     -- ^ The empty Order
-empty = Order {elems = mempty, order = mempty, next = init}
-
--- | Update the value of an existing item
-putItem :: (Ord k, Enum k) => k -> v -> Order k v -> Order k v
-putItem k a m =
-    m {elems = Map.alter f k (elems m)}
-        where f Nothing = (error "putItem: bad key")
-              f (Just _) = Just a
-
--- | Partition an Order into the element at k and the Order
--- containing the remaining elements.
-view :: (Ord k, Enum k) => k -> Order k v -> Maybe (v, Order k v) -- like Data.Set.minView
-view k m = case Map.lookup k (elems m) of
-             Nothing -> Nothing
-             Just x -> Just (x, m {elems = Map.delete k (elems m), order = filter (/= k) (order m)})
-
--- | Build an order from a list of (key, value) pairs.  No
--- uniqueness check of the keys is performed.
-fromPairs :: (Ord k, Enum k) => [(k, v)] -> Order k v
-fromPairs [] = empty
-fromPairs prs =
-    let ks = map fst prs in
-    Order { elems = Map.fromList prs
-          , order = ks
-          , next = succ (foldl1 max ks) }
 
 instance (Ord k, Show k, Show v) => Show (Order k v) where
     show o = "(fromPairs (" ++ show (map (\k -> (k, elems o ! k)) (order o)) ++ "))"
 
--- | Put a new element at the end of the Order, returning a pair
--- containing the new Order and the new key.
-insert :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)
-insert a m = let k = next m in (m {next = succ k, elems = Map.insert k a (elems m), order = order m ++ [k]}, k)
-{-# DEPRECATED insert "Renamed append" #-}
-
--- | Better name than insert.
-append :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)
-append = insert
-
--- | Put a new element at the beginning of the order
-prepend :: (Ord k, Enum k) => v -> Order k v -> (Order k v, k)
-prepend a m = let k = next m in (m {next = succ k, elems = Map.insert k a (elems m), order = k : order m}, k)
-
-moveHead :: Int -> Order k v -> Order k v
-moveHead 0 m = m
-moveHead n m@(Order {order = (k : ks)}) =
-    let (ks1, ks2) = splitAt n ks in m {order = ks1 ++ [k] ++ ks2}
-
--- | Insert an element at the given position.
-insertAt :: (Enum k, Ord k) => Int -> v -> Order k v -> Order k v
-insertAt n v = moveHead n . fst . prepend v
-
--- | Replace the current ordering with the given key list.  The
--- result is a triple: (new, missing, invalid).  Missing pairs are
--- those not mentioned in the new list, invalid are those
--- mentioned but not present in the old Order.
-permute :: (Ord k, Enum k) => [k] -> Order k v -> (Order k v, [(k, v)], [k])
-permute neworder m =
-    reorder $ collect $ sanitize
-    where
-      -- Make sure the new key order doesn't have any unknown keys
-      -- sanitize :: ([k], [k]) -- (known, invalid)
-      sanitize = List.partition (`List.elem` (order m)) neworder
-      -- Collect the values that are missing from the new key order
-      -- collect :: ([k], [k]) -> ([k], [k], [k]) -- (present, missing, invalid)
-      collect (valid, invalid) =
-          let deleted = List.filter (not . (`List.elem` invalid)) (order m) in (valid, deleted, invalid)
-      -- Reorder the OrderMap according to the now safe permutation,
-      -- also return the portion of the OrderMap not mentioned in the
-      -- new order and the list of invalid keys.
-      -- reorder :: ([k], [k], [k]) -> (OrderMap k a, OrderMap k a, [k])
-      reorder (valid, _missing, invalid) =
-          let (validmap, missingmap) = Map.partitionWithKey (\ k _ -> List.elem k valid) (elems m) in
-          (m {elems = validmap, order = valid},
-           (Map.toList missingmap),
-           invalid)
-
 instance (Ord k, Enum k) => Monoid (Order k m) where
     mempty = empty
-    mappend a b = foldr (\ x m -> fst (insert x m)) a (toList b)
+    mappend a b = foldr (\ x m -> fst (append x m)) a (toList b)
 
 -- Not sure how correct these three instances are in the presence of
 -- randomly allocated keys and the like.
@@ -197,7 +107,7 @@ instance (Ord k, Enum k, Monoid (Order k a)) => LL.ListLike (Order k a) a where
           [] -> Nothing
           (hd : tl) -> Just (elems m ! hd, m {order = tl, elems = Map.delete hd (elems m), next = next m})
     null = null . order
-    singleton x = fst $ insert x empty
+    singleton x = fst $ append x empty
     head m = case order m of
                (hd : _) -> elems m ! hd
                _ -> error "OrderMap.head"
@@ -209,62 +119,7 @@ instance (Ord k, Enum k, Monoid (Order k a)) => LL.FoldableLL (Order k a) a wher
     foldl f r0 xs = List.foldl f r0 (toList xs)
     foldr f r0 xs = List.foldr f r0 (toList xs)
 
--- | Remove the element at k if present.
-deleteItem :: (Ord k, Enum k) => k -> Order k v -> Order k v
-deleteItem k m = maybe m snd (Data.Order.view k m)
-
--- | Put a new element at the end of the order, allocating a new key
--- for it.
-appendItem :: (Ord k, Enum k) => v -> Order k v -> Order k v
-appendItem x = fst . insert x
-
-insertItems :: forall k v. (Ord k, Enum k) => Order k v -> [v] -> ([k], Order k v)
-insertItems om xs =
-    foldr f ([], om) (reverse xs)
-    where
-      f x (ks, om') = let (om'', k) = insert x om' in ((k : ks), om'')
-
--- | Return the keys and values of the order.
-toPairs :: (Ord k, Enum k) => Order k v -> [(k, v)]
-toPairs m = map (\ k -> (k, (elems m) ! k)) (order m)
-
--- | Return only the values of the order, discarding the keys.
-toList :: (Ord k, Enum k) => Order k v -> [v]
-toList = map snd . toPairs
-
--- | Build an order from a list of values, allocating new all keys.
-fromList :: (Ord k, Enum k) => [v] -> Order k v
-fromList xs = foldl' (flip appendItem) empty xs
-
--- | Perform an operation on a of an Order's (key, value) pairs,
--- reassembling the resulting pairs into a new Order.
-asList :: (Ord k, Enum k) => ([(k, v)] -> [(k, v)]) -> Order k v -> Order k v
-asList f om = fromPairs . f . toPairs $ om
-
--- | Find the first value (along with the associated key) that
--- satisfies the predicate.
-find :: forall k v. (Ord k, Enum k) => (v -> Bool) -> Order k v -> Maybe (k, v)
-find p m =
-    find' (order m)
-    where
-      find' :: [k] -> Maybe (k, v)
-      find' [] = Nothing
-      find' (k : more) =
-          case Map.lookup k (elems m) of
-            Nothing -> find' more
-            Just x | not (p x) -> find' more
-            Just x -> Just (k, x)
-
--- | Build a lens to focus on the k element of an Order.
-lens_omat :: (Ord k, Enum k) => k -> Traversal' (Order k v) v
-lens_omat k = lens getter setter . _Just
-    where
-      getter s = Map.lookup k (elems s)
-      setter s a = maybe s (\ a' -> putItem k a' s) a
-
--- | Like view, but discards the remainder list
-view' :: (Ord k, Enum k) => k -> Order k v -> v
-view' i m = maybe (error "Order.view'") fst (Data.Order.view i m)
+$(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 
 data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic, FromJSON, ToJSON)
 
