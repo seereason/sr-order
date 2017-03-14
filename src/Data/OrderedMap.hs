@@ -13,24 +13,20 @@
 module Data.OrderedMap
     ( OrderedMap(..)
     , putItem
-    , Data.OrderedMap.view
+    , viewByKey
     , showOrder
-    , insertAt
     , permute
-    , deleteItem
-    , appendItem
     , insertItems
     , toList
     , fromList
     , asList
     , find
     , lens_omat
-    , view'
     ) where
 
 import Control.Lens (Traversal', _Just, lens)
-import Data.List as List (elem, filter, partition)
-import Data.Map as Map ((!), Map)
+import Data.List as List (elem, filter, notElem, partition)
+import Data.Map as Map (Map)
 import qualified Data.Map as Map
 import Prelude hiding (lookup)
 
@@ -50,27 +46,39 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
     toKeys :: o -> [OKey o]
     -- toKeys = map fst . toPairs
 
+    size :: o -> Int
+    size = Map.size . toMap
+
     -- | Unsafe permute function - does not check whether first argument
     -- is a permutation of the existing keys.
     permuteUnsafe :: [OKey o] -> o -> o
-    permuteUnsafe keys o = fromMapAndList (toMap o) keys
+    permuteUnsafe keys o = fromMapListKey (toMap o) keys (nextKey o)
 
     -- | Set the value associated with a key
     alter :: (Maybe (OValue o) -> Maybe (OValue o)) -> OKey o -> o -> o
-    alter f k o = fromMapAndList (Map.alter f k (toMap o)) (toKeys o)
+    alter f k o = fromMapListKey (Map.alter f k (toMap o)) (toKeys o) (nextKey o)
 
     lookup :: OKey o -> o -> Maybe (OValue o)
     lookup k o = Map.lookup k (toMap o)
-    delete :: OKey o -> o -> o
-    delete k o = fromMapAndList (Map.delete k (toMap o)) (toKeys o)
+    deleteByKey :: OKey o -> o -> o
+    deleteByKey k o =
+        fromMapListKey (Map.delete k (toMap o)) (filter (/= k) (toKeys o)) (nextKey o)
+    deleteByPos :: Int -> o -> o
+    deleteByPos pos o = case splitAt pos (toKeys o) of
+                          (_, k : _) -> deleteByKey k o
+                          _ -> o
+
     -- | Put a new element at the beginning of the order, returning a
     -- pair containing the new OrderedMap and the new key.
     prepend :: OValue o -> o -> (o, OKey o)
-    prepend v o = let (k, _) = newKey o in (fromMapAndList (Map.insert k v (toMap o)) (k : toKeys o), k)
-    -- | Put a new element at the end of the OrderedMap, returning a pair
-    -- containing the new OrderedMap and the new key.
-    append :: OValue o -> o -> (o, OKey o)
-    append v o = let (k, _) = newKey o in (fromMapAndList (Map.insert k v (toMap o)) (toKeys o ++ [k]), k)
+    prepend v o = let (k, o') = newKey o in (prependWithKey k v o', k)
+
+    prependWithKey :: OKey o -> OValue o -> o -> o
+    prependWithKey k _ o | Map.member k (toMap o) = error "prependWithKey"
+    prependWithKey k v o =
+        fromMapListKey (Map.insert k v (toMap o)) (k : toKeys o) (max (succ k) (nextKey o))
+
+    -- | Move the head element to a specified position.
     moveHead :: Int -> o -> o
     moveHead 0 o = o
     moveHead n o =
@@ -78,6 +86,18 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
           [] -> o
           (k : ks) -> let (ks1, ks2) = splitAt n ks in
                       permuteUnsafe (ks1 ++ [k] ++ ks2) o
+
+    -- | Insert an element at a specific position.
+    insertAt :: OrderedMap o => Int -> OValue o -> o -> (o, OKey o)
+    insertAt n v o = let (o', k) = prepend v o in (moveHead n o', k)
+
+    insertWithKey :: OrderedMap o => Int -> OKey o -> OValue o -> o -> o
+    insertWithKey n k v o = let o' = prependWithKey k v o in moveHead n o'
+
+    -- | Put a new element at the end of the OrderedMap, returning a pair
+    -- containing the new OrderedMap and the new key.
+    append :: OValue o -> o -> (o, OKey o)
+    append v o = insertAt (size o) v o
 
 -- | Update the value of an existing item
 putItem :: OrderedMap o => OKey o -> OValue o -> o -> o
@@ -87,18 +107,14 @@ putItem k a m = alter f k m
 
 -- | Partition an OrderedMap into the element at k and the OrderedMap
 -- containing the remaining elements.
-view :: forall o. OrderedMap o => OKey o -> o -> Maybe (OValue o, o) -- like Data.Set.minView
-view k o =
+viewByKey :: forall o. OrderedMap o => OKey o -> o -> Maybe (OValue o, o) -- like Data.Set.minView
+viewByKey k o =
     case lookup k o of
-      Just v -> Just (v, delete k o)
+      Just v -> Just (v, deleteByKey k o)
       Nothing -> Nothing
 
 showOrder :: (OrderedMap o, Show (OValue o), Show (OKey o)) => o -> String
-showOrder o = "(fromPairs (" ++ show (map (\k -> (k, toMap o ! k)) (toKeys o)) ++ "))"
-
--- | Insert an element at the given position.
-insertAt :: OrderedMap o => Int -> OValue o -> o -> o
-insertAt n v = moveHead n . fst . prepend v
+showOrder o = "(fromPairs (" ++ show (toPairs o) ++ "))"
 
 -- | Replace the current ordering with the given key list.  The
 -- result is a triple: (new, missing, invalid).  Missing pairs are
@@ -110,11 +126,11 @@ permute neworder m =
     where
       -- Make sure the new key order doesn't have any unknown keys
       -- sanitize :: ([k], [k]) -- (known, invalid)
-      sanitize = List.partition (`List.elem` (toKeys m)) neworder
+      sanitize = List.partition (`Map.member` (toMap m)) neworder
       -- Collect the values that are missing from the new key order
       -- collect :: ([k], [k]) -> ([k], [k], [k]) -- (present, missing, invalid)
       collect (valid, invalid) =
-          let deleted = List.filter (not . (`List.elem` invalid)) (toKeys m) in (valid, deleted, invalid)
+          let deleted = List.filter (`List.notElem` invalid) (toKeys m) in (valid, deleted, invalid)
       -- Reorder the OrderMap according to the now safe permutation,
       -- also return the portion of the OrderMap not mentioned in the
       -- new order and the list of invalid keys.
@@ -124,16 +140,6 @@ permute neworder m =
           (fromMapAndList validmap valid,
            (Map.toList missingmap),
            invalid)
-
--- | Remove the element at k if present.
-deleteItem :: OrderedMap o => OKey o -> o -> o
-deleteItem = delete
-{-# DEPRECATED deleteItem "Renamed delete " #-}
-
--- | Put a new element at the end of the order, allocating a new key
--- for it.
-appendItem :: OrderedMap o => OValue o -> o -> o
-appendItem x = fst . append x
 
 insertItems :: OrderedMap o => o -> [OValue o] -> ([OKey o], o)
 insertItems om xs =
@@ -175,6 +181,8 @@ lens_omat k = lens getter setter . _Just
       getter s = Map.lookup k (toMap s)
       setter s a = maybe s (\ a' -> putItem k a' s) a
 
+{-
 -- | Like view, but discards the remainder list
 view' :: OrderedMap o => OKey o -> o -> OValue o
 view' i m = maybe (error "OrderedMap.view'") fst (Data.OrderedMap.view i m)
+-}

@@ -15,6 +15,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -26,7 +27,7 @@ module Data.Order
 #if !__GHCJS__
     , deriveOrder
 #endif
-    , module Data.OrderedMap
+    , module OrderedMap
     ) where
 
 import Control.Lens (Traversal', _Just, lens, Lens', makeLensesFor, view)
@@ -34,11 +35,12 @@ import Data.Aeson (ToJSON(toJSON), FromJSON(parseJSON))
 import Data.Data (Data)
 import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
 import qualified Data.ListLike as LL
-import Data.Map as Map (Map, (!))
+import Data.Map as Map ((!), Map)
 import qualified Data.Map as Map
-import Data.OrderedMap
+import Data.OrderedMap as OrderedMap
 import Data.Proxy (Proxy(Proxy))
 import Data.SafeCopy (SafeCopy(..), base, contain, deriveSafeCopy, safeGet, safePut)
+import Data.Set as Set (fromList)
 import Data.Tree (Tree(Node))
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
@@ -49,7 +51,16 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Lift (deriveLiftMany)
 --import Language.Haskell.TH.TypeGraph.Prelude ({-some Lift instances?-})
 import Prelude hiding (init)
+import Test.QuickCheck (Arbitrary(arbitrary), choose, forAll, Gen, infiniteListOf,
+                        Property, property, quickCheckAll, shuffle)
 import Web.Routes.TH (derivePathInfo)
+
+{-
+bang :: (Eq k, Ord k, Show k, Show v) => String -> Map k v -> k -> v
+bang s mp k = case Map.lookup k mp of
+             Nothing -> error $ s ++ " " ++ show mp ++ " ! " ++ show k
+             Just v -> v
+-}
 
 data Order k v =
     Order { elems :: Map k v
@@ -82,28 +93,29 @@ instance (Ord k, Enum k, ToJSON k, Data v, ToJSON v) => ToJSON (Order k v) where
 instance (Ord k, Enum k, FromJSON k, Data v, FromJSON v) => FromJSON (Order k v) where
   parseJSON = fmap fromPairs . parseJSON
 
-instance (Ord k, Show k, Show v) => Show (Order k v) where
-    show o = "(fromPairs (" ++ show (map (\k -> (k, elems o ! k)) (order o)) ++ "))"
+instance (Ord k, Enum k, Show k, Show v) => Show (Order k v) where
+    show o = "fromMapKeyList (" ++ show (toMap o) ++ ") (" ++ show (toKeys o) ++ ") (" ++ show (nextKey o) ++ ")"
+    -- show o = "(fromPairs (" ++ show (toPairs o) ++ "))"
 
-instance (Ord k, Enum k) => Monoid (Order k m) where
+instance (Ord k, Enum k) => Monoid (Order k v) where
     mempty = empty
     mappend a b = foldr (\ x m -> fst (append x m)) a (toList b)
 
 -- Not sure how correct these three instances are in the presence of
 -- randomly allocated keys and the like.
-instance (Ord k, Enum k, Eq a) => Eq (Order k a) where
+instance (Ord k, Enum k, Eq v) => Eq (Order k v) where
     a == b = toList a == toList b
 
-instance (Ord k, Enum k, Eq a, Ord a) => Ord (Order k a) where
+instance (Ord k, Enum k, Eq v, Ord v) => Ord (Order k v) where
     compare a b = compare (toList a) (toList b)
 
-instance (Ord k, Enum k, Read a) => Read (Order k a) where
+instance (Ord k, Enum k, Read v) => Read (Order k v) where
     -- readsPrec :: Int -> String -> [(OrderMap k a, String)]
-    readsPrec _ s = let l = (read s :: [a]) in [(fromList l, "")]
+    readsPrec _ s = let l = (read s :: [v]) in [(OrderedMap.fromList l, "")]
 
-instance (Ord k, Enum k, Monoid (Order k a)) => LL.ListLike (Order k a) a where
+instance (Ord k, Enum k, Monoid (Order k v)) => LL.ListLike (Order k v) v where
     uncons m =
-        case order m of
+        case toKeys m of
           [] -> Nothing
           (hd : tl) -> Just (elems m ! hd, m {order = tl, elems = Map.delete hd (elems m), next = next m})
     null = null . order
@@ -115,7 +127,7 @@ instance (Ord k, Enum k, Monoid (Order k a)) => LL.ListLike (Order k a) a where
                (hd : tl) -> m {order = tl, elems = Map.delete hd (elems m), next = next m}
                _ -> error "OrderMap.tail"
 
-instance (Ord k, Enum k, Monoid (Order k a)) => LL.FoldableLL (Order k a) a where
+instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v where
     foldl f r0 xs = List.foldl f r0 (toList xs)
     foldr f r0 xs = List.foldr f r0 (toList xs)
 
@@ -123,7 +135,7 @@ $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''
 
 data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic, FromJSON, ToJSON)
 
-omapPaths :: (Ord k, Enum k) => Lens' a (Order k b) -> a -> [(k, c -> Path_OMap k c)]
+omapPaths :: (Ord k, Enum k) => Lens' a (Order k v) -> a -> [(k, c -> Path_OMap k c)]
 omapPaths lns a = map (\ (k, _) -> (k, Path_At k)) (toPairs (Control.Lens.view lns a))
 
 #if !__GHCJS__

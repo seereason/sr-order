@@ -1,5 +1,5 @@
 name:               sr-order
-version:            0.38
+version:            0.39
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -24,15 +24,25 @@ library
     containers,
     lens,
     ListLike,
+    QuickCheck,
     safecopy,
     template-haskell,
     th-lift,
     th-lift-instances,
+    web-routes,
     web-routes-th
   exposed-modules:
     Data.Order
     Data.OrderedMap
   default-language: Haskell2010
+
+test-suite order-tests
+  default-language: Haskell2010
+  type: exitcode-stdio-1.0
+  ghc-options: -Wall
+  hs-source-dirs: tests
+  main-is: Main.hs
+  build-depends: base, containers, sr-order, QuickCheck
 
 source-repository head
   type:     git
