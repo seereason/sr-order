@@ -99,6 +99,9 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
     append :: OValue o -> o -> (o, OKey o)
     append v o = insertAt (size o) v o
 
+    appendWithKey :: OKey o -> OValue o -> o -> o
+    appendWithKey k v o = insertWithKey (size o) k v o
+
 -- | Update the value of an existing item
 putItem :: OrderedMap o => OKey o -> OValue o -> o -> o
 putItem k a m = alter f k m
