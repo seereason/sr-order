@@ -7,13 +7,6 @@ import Data.Order
 import Data.OrderedMap as OrderedMap
 import Test.QuickCheck
 
-instance forall k v. (Enum k, Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
-    arbitrary =
-        fromPairs <$>
-          (zip
-             <$> ((sublistOf (fmap toEnum [0..20]) :: Gen [k]) >>= shuffle)
-             <*> infiniteListOf (arbitrary :: Gen v))
-
 prop_next_exceeds_all_keys :: Order Int String -> Bool
 prop_next_exceeds_all_keys o =
     case toKeys o of

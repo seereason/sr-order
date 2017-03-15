@@ -52,7 +52,7 @@ import Language.Haskell.TH.Lift (deriveLiftMany)
 --import Language.Haskell.TH.TypeGraph.Prelude ({-some Lift instances?-})
 import Prelude hiding (init)
 import Test.QuickCheck (Arbitrary(arbitrary), choose, forAll, Gen, infiniteListOf,
-                        Property, property, quickCheckAll, shuffle)
+                        Property, property, quickCheckAll, shuffle, sublistOf)
 import Web.Routes.TH (derivePathInfo)
 
 {-
@@ -130,6 +130,13 @@ instance (Ord k, Enum k, Monoid (Order k v)) => LL.ListLike (Order k v) v where
 instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v where
     foldl f r0 xs = List.foldl f r0 (toList xs)
     foldr f r0 xs = List.foldr f r0 (toList xs)
+
+instance forall k v. (Enum k, Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
+    arbitrary =
+        fromPairs <$>
+          (zip
+             <$> ((sublistOf (fmap toEnum [0..20]) :: Gen [k]) >>= shuffle)
+             <*> infiniteListOf (arbitrary :: Gen v))
 
 $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 
