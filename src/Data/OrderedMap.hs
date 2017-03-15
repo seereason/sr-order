@@ -28,7 +28,6 @@ import Control.Lens (Traversal', _Just, lens)
 import Data.List as List (elem, filter, notElem, partition)
 import Data.Map as Map (Map)
 import qualified Data.Map as Map
-import Prelude hiding (lookup)
 
 class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
     type OKey o
@@ -58,14 +57,18 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
     alter :: (Maybe (OValue o) -> Maybe (OValue o)) -> OKey o -> o -> o
     alter f k o = fromMapListKey (Map.alter f k (toMap o)) (toKeys o) (nextKey o)
 
-    lookup :: OKey o -> o -> Maybe (OValue o)
-    lookup k o = Map.lookup k (toMap o)
+    lookByKey :: OKey o -> o -> Maybe (OValue o)
+    lookByKey k o = Map.lookup k (toMap o)
+    lookByPos :: Int -> o -> Maybe (OValue o)
+    lookByPos pos o = case drop pos (toKeys o) of
+                          k : _ -> lookByKey k o
+                          _ -> Nothing
     deleteByKey :: OKey o -> o -> o
     deleteByKey k o =
         fromMapListKey (Map.delete k (toMap o)) (filter (/= k) (toKeys o)) (nextKey o)
     deleteByPos :: Int -> o -> o
-    deleteByPos pos o = case splitAt pos (toKeys o) of
-                          (_, k : _) -> deleteByKey k o
+    deleteByPos pos o = case drop pos (toKeys o) of
+                          k : _ -> deleteByKey k o
                           _ -> o
 
     -- | Put a new element at the beginning of the order, returning a
@@ -88,10 +91,10 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
                       permuteUnsafe (ks1 ++ [k] ++ ks2) o
 
     -- | Insert an element at a specific position.
-    insertAt :: OrderedMap o => Int -> OValue o -> o -> (o, OKey o)
+    insertAt :: {-OrderedMap o =>-} Int -> OValue o -> o -> (o, OKey o)
     insertAt n v o = let (o', k) = prepend v o in (moveHead n o', k)
 
-    insertWithKey :: OrderedMap o => Int -> OKey o -> OValue o -> o -> o
+    insertWithKey :: {-0OrderedMap o =>-} Int -> OKey o -> OValue o -> o -> o
     insertWithKey n k v o = let o' = prependWithKey k v o in moveHead n o'
 
     -- | Put a new element at the end of the OrderedMap, returning a pair
@@ -112,7 +115,7 @@ putItem k a m = alter f k m
 -- containing the remaining elements.
 viewByKey :: forall o. OrderedMap o => OKey o -> o -> Maybe (OValue o, o) -- like Data.Set.minView
 viewByKey k o =
-    case lookup k o of
+    case lookByKey k o of
       Just v -> Just (v, deleteByKey k o)
       Nothing -> Nothing
 
