@@ -94,7 +94,7 @@ instance (Ord k, Enum k, FromJSON k, Data v, FromJSON v) => FromJSON (Order k v)
   parseJSON = fmap fromPairs . parseJSON
 
 instance (Ord k, Enum k, Show k, Show v) => Show (Order k v) where
-    show o = "fromMapKeyList (" ++ show (toMap o) ++ ") (" ++ show (toKeys o) ++ ") (" ++ show (nextKey o) ++ ")"
+    show o = "fromMapListKey (" ++ show (toMap o) ++ ") (" ++ show (toKeys o) ++ ") (" ++ show (nextKey o) ++ ")"
     -- show o = "(fromPairs (" ++ show (toPairs o) ++ "))"
 
 instance (Ord k, Enum k) => Monoid (Order k v) where
