@@ -24,9 +24,7 @@ module Data.Order
     ( Order(..), elemsL, orderL, nextL
     , omapPaths
     , Path_OMap(Path_OMap, Path_At)
-#if !__GHCJS__
     , deriveOrder
-#endif
     , module OrderedMap
     ) where
 
@@ -145,7 +143,6 @@ data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Type
 omapPaths :: (Ord k, Enum k) => Lens' a (Order k v) -> a -> [(k, c -> Path_OMap k c)]
 omapPaths lns a = map (\ (k, _) -> (k, Path_At k)) (toPairs (Control.Lens.view lns a))
 
-#if !__GHCJS__
 -- | Given the name of a type such as AbbrevPair, generate declarations
 -- @@
 --     newtype AbbrevPairID = AbbrevPairID {unAbbrevPairID :: IntJS} deriving (Eq, Ord, Read, Show, Data, Typeable)
@@ -182,7 +179,8 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
                            next_ <- safeGet
                            return $ Order {elems = elems_, order = order_, next = next_}
 
-$(derivePathInfo ''Path_OMap)
 $(deriveSafeCopy 0 'base ''Path_OMap)
 $(deriveLiftMany [''Order])
+#if !__GHCJS__
+$(derivePathInfo ''Path_OMap)
 #endif
