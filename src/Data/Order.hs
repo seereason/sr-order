@@ -8,6 +8,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -68,7 +69,7 @@ data Order k v =
           , next :: k
           -- ^ Next available key
           }
-    deriving (Data, Typeable, Generic)
+    deriving (Data, Typeable, Generic, Functor)
 
 instance (Enum k, Ord k) => OrderedMap (Order k v) where
     type OKey (Order k v) = k
