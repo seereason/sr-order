@@ -1,8 +1,8 @@
 {-# LANGUAGE CPP, FlexibleInstances, ScopedTypeVariables, TemplateHaskell, TupleSections, TypeFamilies #-}
 {-# OPTIONS -ddump-splices #-}
 
+import Data.List (nub, sort)
 import Data.Map as Map
-import Data.Set as Set
 import Data.Order
 import Data.OrderedMap as OrderedMap
 import Test.QuickCheck
@@ -13,9 +13,10 @@ prop_next_exceeds_all_keys o =
       [] -> True
       l -> maximum l < nextKey o
 
+-- | Map and list should contain the same keys with no duplicates
 prop_same_keys :: Order Int String -> Bool
 prop_same_keys o =
-    Set.fromList (toKeys o) == Set.fromList (Map.keys (toMap o))
+     sort (toKeys o) == nub (sort (Map.keys (toMap o)))
 
 prop_toPairs_fromPairs :: Order Int String -> Bool
 prop_toPairs_fromPairs o =

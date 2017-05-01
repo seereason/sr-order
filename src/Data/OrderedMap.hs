@@ -16,7 +16,6 @@ module Data.OrderedMap
     ( OrderedMap(..)
     , OrderError(..)
     , putItem
-    , viewByKey
     , showOrder
     , permute
     , insertItems
@@ -83,18 +82,25 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
               let (ks1, ks2) = splitAt n ks in
               permuteUnsafe (ks1 ++ [k] ++ ks2) o
 
-    moveHead :: Int -> o -> Either (OrderError o) o
+    moveHead :: Int -> o -> Either OrderError o
     moveHead _ o | size o == 0 = Left EmptyOrder
-    moveHead n o | n > size o = Left (OutOfRange n o)
+    moveHead n o | n > size o = Left (OutOfRange n {-o-})
     moveHead n o = Right (moveHeadUnsafe n o)
+
+    viewByKey :: OKey o -> o -> Either OrderError (Int, OValue o, o)
+    viewByKey k o =
+        -- Invariant: order keys are unique
+        case break ((== k) . fst) (toPairs o) of
+          (_, []) -> Left InvalidKey
+          (pre, (_, x) : post) -> Right (length pre, x, fromPairs (pre ++ post))
 
     -- | Delete if present
     deleteByKeyMaybe :: OKey o -> o -> o
     deleteByKeyMaybe k o =
         fromMapListKey (Map.delete k (toMap o)) (filter (/= k) (toKeys o)) (nextKey o)
-    deleteByKey :: OKey o -> o -> Either (OrderError o) o
+    deleteByKey :: OKey o -> o -> Either OrderError o
     deleteByKey k o =
-        maybe (Left (InvalidKey k o))
+        maybe (Left (InvalidKey {-k o-}))
               (\_ -> Right (deleteByKeyMaybe k o))
               (Map.lookup k (toMap o))
 
@@ -103,8 +109,8 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
         case drop n (toKeys o) of
           k : _ -> deleteByKeyMaybe k o
           _ -> o
-    deleteByPos :: Int -> o -> Either (OrderError o) o
-    deleteByPos n o | n > size o = Left (OutOfRange n o)
+    deleteByPos :: Int -> o -> Either OrderError o
+    deleteByPos n o | n > size o = Left (OutOfRange n {-o-})
     deleteByPos n o = Right (deleteByPosUnsafe n o)
 
     -- | Put a new element at the beginning of the order, returning a
@@ -112,8 +118,8 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
     prepend :: OValue o -> o -> (o, OKey o)
     prepend v o = let (k, o') = newKey o in (prependWithKeyUnsafe k v o', k)
 
-    prependWithKey :: OKey o -> OValue o -> o -> Either (OrderError o) o
-    prependWithKey k _ o | Map.member k (toMap o) = Left (DuplicateKey k o)
+    prependWithKey :: OKey o -> OValue o -> o -> Either OrderError o
+    prependWithKey k _ o | Map.member k (toMap o) = Left (DuplicateKey {-k o-})
     prependWithKey k v o = Right (prependWithKeyUnsafe k v o)
 
     prependWithKeyUnsafe :: OKey o -> OValue o -> o -> o
@@ -125,16 +131,16 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
     insertAtUnsafe :: Int -> OValue o -> o -> (o, OKey o)
     insertAtUnsafe n v o = let (o', k) = prepend v o in (moveHeadUnsafe n o', k)
 
-    insertAt :: Int -> OValue o -> o -> Either (OrderError o) (o, OKey o)
-    insertAt n _ o | n > size o = Left (OutOfRange n o)
+    insertAt :: Int -> OValue o -> o -> Either OrderError (o, OKey o)
+    insertAt n _ o | n > size o = Left (OutOfRange n {-o-})
     insertAt n v o = Right (insertAtUnsafe n v o)
 
     insertWithKeyUnsafe :: Int -> OKey o -> OValue o -> o -> o
     insertWithKeyUnsafe n k v o = let o' = prependWithKeyUnsafe k v o in moveHeadUnsafe n o'
 
-    insertWithKey :: Int -> OKey o -> OValue o -> o -> Either (OrderError o) o
-    insertWithKey n _ _ o | n > size o = Left (OutOfRange n o)
-    insertWithKey _ k _ o | Map.member k (toMap o) = Left (DuplicateKey k o)
+    insertWithKey :: Int -> OKey o -> OValue o -> o -> Either OrderError o
+    insertWithKey n _ _ o | n > size o = Left (OutOfRange n {-o-})
+    insertWithKey _ k _ o | Map.member k (toMap o) = Left (DuplicateKey {-k o-})
     insertWithKey n k v o = let o' = prependWithKeyUnsafe k v o in Right (moveHeadUnsafe n o')
 
     -- | Put a new element at the end of the OrderedMap, returning a pair
@@ -145,23 +151,17 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
     appendWithKeyUnsafe :: OKey o -> OValue o -> o -> o
     appendWithKeyUnsafe k v o = insertWithKeyUnsafe (size o) k v o
 
-    appendWithKey :: OKey o -> OValue o -> o -> Either (OrderError o) o
-    appendWithKey k _ o | Map.member k (toMap o) = Left (DuplicateKey k o)
+    appendWithKey :: OKey o -> OValue o -> o -> Either OrderError o
+    appendWithKey k _ o | Map.member k (toMap o) = Left (DuplicateKey {-k o-})
     appendWithKey k v o = Right (appendWithKeyUnsafe k v o)
 
-data OrderError o
-    = InvalidKey (OKey o) o
-    | InvalidPermutation o [(OKey o, OValue o)] [OKey o]
-    -- ^ Description of problems with an attempt to permute a list.
-    -- Missing pairs are those not mentioned in the new list, invalid
-    -- keys are those mentioned but not present in the old OrderedMap.
-    | DuplicateKey (OKey o) o
-    | OutOfRange Int o
+data OrderError
+    = InvalidKey
+    | InvalidPermutation
+    | DuplicateKey
+    | OutOfRange Int
     | EmptyOrder -- ^ Expected an order with at least one element
-
-deriving instance (Eq o, Eq (OKey o), Eq (OValue o)) => Eq (OrderError o)
-deriving instance (Ord o, Ord (OKey o), Ord (OValue o)) => Ord (OrderError o)
-deriving instance (Show o, Show (OKey o), Show (OValue o)) => Show (OrderError o)
+    deriving (Eq, Ord, Show)
 
 -- | Update the value of an existing item
 putItem :: OrderedMap o => OKey o -> OValue o -> o -> o
@@ -169,20 +169,12 @@ putItem k a m = alter f k m
          where f Nothing = (error "putItem: bad key")
                f (Just _) = Just a
 
--- | Partition an OrderedMap into the element at k and the OrderedMap
--- containing the remaining elements.
-viewByKey :: forall o. OrderedMap o => OKey o -> o -> Maybe (OValue o, o) -- like Data.Set.minView
-viewByKey k o =
-    case lookByKey k o of
-      Just v -> Just (v, deleteByKeyMaybe k o)
-      Nothing -> Nothing
-
 showOrder :: (OrderedMap o, Show (OValue o), Show (OKey o)) => o -> String
 showOrder o = "(fromPairs (" ++ show (toPairs o) ++ "))"
 
 -- | Replace the current ordering with the given key list, which must
 -- be the same length and contain the same keys as the order.
-permute :: OrderedMap o => [OKey o] -> o -> Either (OrderError o) o
+permute :: OrderedMap o => [OKey o] -> o -> Either OrderError o
 permute neworder m =
     reorder $ collect $ sanitize
     where
@@ -201,7 +193,7 @@ permute neworder m =
           let (validmap, missingmap) = Map.partitionWithKey (\ k _ -> List.elem k valid) (toMap m) in
           if Map.null missingmap && null invalid
           then Right (fromMapAndList validmap valid)
-          else Left (InvalidPermutation m (Map.toList missingmap) invalid)
+          else Left InvalidPermutation
 
 insertItems :: OrderedMap o => o -> [OValue o] -> ([OKey o], o)
 insertItems om xs =
