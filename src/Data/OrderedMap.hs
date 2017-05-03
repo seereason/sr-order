@@ -27,9 +27,18 @@ module Data.OrderedMap
     ) where
 
 import Control.Lens (Traversal', _Just, lens)
+import Data.Data (Data)
 import Data.List as List (elem, filter, notElem, partition)
 import Data.Map as Map (Map)
 import qualified Data.Map as Map
+
+data OrderError
+    = InvalidKey
+    | InvalidPermutation
+    | DuplicateKey
+    | OutOfRange Int
+    | EmptyOrder -- ^ Expected an order with at least one element
+    deriving (Data, Eq, Ord, Show)
 
 -- | Minimum implementation: OKey, OValue
 class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
@@ -154,14 +163,6 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
     appendWithKey :: OKey o -> OValue o -> o -> Either OrderError o
     appendWithKey k _ o | Map.member k (toMap o) = Left (DuplicateKey {-k o-})
     appendWithKey k v o = Right (appendWithKeyUnsafe k v o)
-
-data OrderError
-    = InvalidKey
-    | InvalidPermutation
-    | DuplicateKey
-    | OutOfRange Int
-    | EmptyOrder -- ^ Expected an order with at least one element
-    deriving (Eq, Ord, Show)
 
 -- | Update the value of an existing item
 putItem :: OrderedMap o => OKey o -> OValue o -> o -> o
