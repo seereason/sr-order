@@ -18,7 +18,7 @@ module Data.OrderedMap
     , putItem
     , showOrder
     , permute
-    , insertItems
+    , appendItems
     , toList
     , fromList
     , asList
@@ -26,7 +26,7 @@ module Data.OrderedMap
     , lens_omat
     ) where
 
-import Control.Lens (Traversal', _Just, lens)
+import Control.Lens (_1, _Just, lens, over, Traversal')
 import Data.Data (Data)
 import Data.List as List (elem, filter, notElem, partition)
 import Data.Map as Map (Map)
@@ -196,11 +196,14 @@ permute neworder m =
           then Right (fromMapAndList validmap valid)
           else Left InvalidPermutation
 
-insertItems :: OrderedMap o => o -> [OValue o] -> ([OKey o], o)
-insertItems om xs =
-    foldr f ([], om) (reverse xs)
+-- | Append several items
+--     λ> let o = (fromPairs [(1,'z')]) in insertItems o ['a','b','c'] :: ([Int], Order Int Char)
+--     ([2,3,4],fromMapListKey (fromList [(1,'z'),(2,'a'),(3,'b'),(4,'c')]) ([1,2,3,4]) (5))
+appendItems :: OrderedMap o => o -> [OValue o] -> ([OKey o], o)
+appendItems om xs =
+    over _1 reverse $ foldl f ([], om) xs
     where
-      f x (ks, om') = let (om'', k) = append x om' in ((k : ks), om'')
+      f (ks, om') x = let (om'', k) = append x om' in ((k : ks), om'')
 
 -- | Return only the values of the order, discarding the keys.
 toList :: OrderedMap o => o -> [OValue o]
