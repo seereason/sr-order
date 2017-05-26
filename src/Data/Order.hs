@@ -29,7 +29,7 @@ module Data.Order
     , module OrderedMap
     ) where
 
-import Control.Lens (Traversal', _Just, lens, Lens', makeLensesFor, view)
+import Control.Lens (FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), TraversableWithIndex(..), Traversal', _Just, lens, Lens', makeLensesFor, view)
 import Data.Aeson (ToJSON(toJSON), FromJSON(parseJSON))
 import Data.Data (Data)
 import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
@@ -85,6 +85,20 @@ instance (Enum k, Ord k) => OrderedMap (Order k v) where
                                        order = k : order o,
                                        next = max (succ k) (next o)}) empty
     toPairs o = let mp = toMap o in map (\k -> (k, mp ! k)) (toKeys o)
+
+instance Traversable (Order k) where
+    traverse f (Order es ks n) = Order <$> traverse f es <*> pure ks <*> pure n
+
+instance TraversableWithIndex k (Order k) where
+    itraverse f (Order es ks n) = Order <$> itraverse f es <*> pure ks <*> pure n
+
+instance Foldable (Order k) where
+    foldMap f (Order es ks n) = foldMap f es
+
+instance FoldableWithIndex k (Order k) where
+    ifoldMap f (Order es ks n) = ifoldMap f es
+instance FunctorWithIndex k (Order k) where
+    imap f (Order es ks n) = Order (Map.mapWithKey f es) ks n
 
 instance (Ord k, Enum k, ToJSON k, Data v, ToJSON v) => ToJSON (Order k v) where
   toJSON = toJSON . toPairs
