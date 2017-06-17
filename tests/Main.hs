@@ -44,16 +44,14 @@ prop_insert_delete_pos v o =
     forAll (choose (0, OrderedMap.size o)) $ \pos ->
         (let Right (o', _) = insertAt pos v o in deleteByPos pos o') == Right o
 
-newtype AlterTestCase a = AlterTestCase a deriving Show
+instance Arbitrary (Order Int String) where
+    arbitrary = elements [ fromPairs [(1,"1"), (2, "2"), (3, "3"), (4, "4")]
+                         -- , fromPairs [(1,"1"), (2, "2"), (4, "4")]
+                         -- , fromPairs []
+                         ]
 
-instance Arbitrary (AlterTestCase (Order Int String)) where
-    arbitrary = elements (fmap AlterTestCase [ fromPairs [(1,"1"), (2, "2"), (3, "3"), (4, "4")]
-                                             -- , fromPairs [(1,"1"), (2, "2"), (4, "4")]
-                                             -- , fromPairs []
-                                             ])
-
-prop_alter_test :: AlterTestCase (Order Int String) -> Bool
-prop_alter_test (AlterTestCase o) =
+prop_alter_test :: Order Int String -> Bool
+prop_alter_test o =
     OrderedMap.alter (maybe (Just "new") (\_ -> Just "new")) 3 o == fromMapListKey (Map.fromList [(1,"1"),(2,"2"),(3,"new"),(4,"4")]) ([1,2,3,4]) (5)
 
 return []

@@ -144,13 +144,6 @@ instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v wher
     foldl f r0 xs = List.foldl f r0 (toList xs)
     foldr f r0 xs = List.foldr f r0 (toList xs)
 
-instance forall k v. (Enum k, Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
-    arbitrary =
-        fromPairs <$>
-          (zip
-             <$> ((sublistOf (fmap toEnum [0..20]) :: Gen [k]) >>= shuffle)
-             <*> infiniteListOf (arbitrary :: Gen v))
-
 $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 
 data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic, FromJSON, ToJSON)
