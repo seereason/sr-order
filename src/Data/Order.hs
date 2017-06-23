@@ -79,7 +79,7 @@ instance (Enum k, Ord k) => OrderedMap (Order k v) where
     toMap = elems
     toKeys = order
     newKey o = (next o, o {next = succ (next o)})
-    fromMapAndList mp ks = Order { elems = mp, order = ks, next = succ (maximum ks)}
+    fromMapAndList mp ks = Order { elems = mp, order = ks, next = succ (maximum (toEnum 0 : ks))}
     fromMapListKey mp ks k = Order { elems = mp, order = ks, next = k}
     fromPairs = foldr (\(k, v) o -> o {elems = Map.insert k v (elems o),
                                        order = k : order o,
