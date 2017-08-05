@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS -Wall #-}
@@ -52,9 +53,9 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
 
     lookByKey :: OKey o -> o -> Maybe (OValue o)
     lookByKey k o = Map.lookup k (toMap o)
-    lookByPos :: Int -> o -> Maybe (OValue o)
+    lookByPos :: Int -> o -> Maybe (OKey o, OValue o)
     lookByPos pos o = case drop pos (toKeys o) of
-                          k : _ -> lookByKey k o
+                          k : _ -> fmap (k,) (lookByKey k o)
                           _ -> Nothing
 
     nextKey :: o -> OKey o
