@@ -32,6 +32,7 @@ module Data.Order
 import Control.Lens (FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), TraversableWithIndex(..), Traversal', _Just, lens, Lens', makeLensesFor, view)
 import Data.Aeson (ToJSON(toJSON), FromJSON(parseJSON))
 import Data.Data (Data)
+import Data.Default (Default(def))
 import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
 import qualified Data.ListLike as LL
 import Data.Map as Map ((!), Map)
@@ -85,6 +86,9 @@ instance (Enum k, Ord k) => OrderedMap (Order k v) where
                                        order = k : order o,
                                        next = max (succ k) (next o)}) empty
     toPairs o = let mp = toMap o in map (\k -> (k, mp ! k)) (toKeys o)
+
+instance (Enum k, Ord k) => Default (Order k v) where
+    def = empty
 
 instance Traversable (Order k) where
     traverse f (Order es ks n) = Order <$> traverse f es <*> pure ks <*> pure n

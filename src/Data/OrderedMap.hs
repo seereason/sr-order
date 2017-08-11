@@ -30,6 +30,7 @@ module Data.OrderedMap
 import Control.Lens (_1, _Just, lens, over, Traversal')
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Data (Data)
+import Data.Default (Default(def))
 import Data.List as List (elem, filter, notElem, partition)
 import Data.Map as Map (Map)
 import qualified Data.Map as Map
@@ -44,7 +45,7 @@ data OrderError
     deriving (Data, Eq, Ord, Show, Generic, ToJSON, FromJSON)
 
 -- | Minimum implementation: OKey, OValue
-class (Eq (OKey o), Ord (OKey o), Enum (OKey o)) => OrderedMap o where
+class (Eq (OKey o), Ord (OKey o), Enum (OKey o), Default o) => OrderedMap o where
     type OKey o
     type OValue o
 
