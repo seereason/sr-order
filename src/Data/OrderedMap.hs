@@ -24,6 +24,8 @@ module Data.OrderedMap
     , fromList
     , asList
     , find
+    , findWithKey
+    , keyToPos
     , lens_omat
     ) where
 
@@ -31,7 +33,7 @@ import Control.Lens (_1, _Just, lens, over, Traversal')
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Data (Data)
 import Data.Default (Default(def))
-import Data.List as List (elem, filter, notElem, partition)
+import Data.List as List (elem, filter, notElem, partition, span)
 import Data.Map as Map (Map)
 import qualified Data.Map as Map
 import GHC.Generics (Generic)
@@ -225,7 +227,10 @@ asList f om = fromPairs . f . toPairs $ om
 -- | Find the first value (along with the associated key) that
 -- satisfies the predicate.
 find :: forall o. OrderedMap o => (OValue o -> Bool) -> o -> Maybe (OKey o, OValue o)
-find p m =
+find p m = findWithKey (\_ v -> p v) m
+
+findWithKey :: forall o. OrderedMap o => (OKey o -> OValue o -> Bool) -> o -> Maybe (OKey o, OValue o)
+findWithKey p m =
     find' (toKeys m)
     where
       find' :: [OKey o] -> Maybe (OKey o, OValue o)
@@ -233,8 +238,14 @@ find p m =
       find' (k : more) =
           case Map.lookup k (toMap m) of
             Nothing -> find' more
-            Just x | not (p x) -> find' more
+            Just x | not (p k x) -> find' more
             Just x -> Just (k, x)
+
+keyToPos :: (Eq (OKey o), OrderedMap o) => o -> OKey o -> Maybe Int
+keyToPos o k =
+    case span (/= k) (toKeys o) of
+      (_, []) -> Nothing
+      (pre, _) -> Just (length pre)
 
 -- | Build a lens to focus on the k element of an OrderedMap.
 lens_omat :: OrderedMap o => OKey o -> Traversal' (o) (OValue o)
