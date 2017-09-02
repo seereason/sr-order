@@ -32,8 +32,8 @@ module Data.OrderedMap
 import Control.Lens (_1, _Just, lens, over, Traversal')
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Data (Data)
-import Data.Default (Default(def))
-import Data.List as List (elem, filter, notElem, partition, span)
+import Data.Default (Default)
+import Data.List as List (elem, filter, notElem, partition)
 import Data.Map as Map (Map)
 import qualified Data.Map as Map
 import GHC.Generics (Generic)
