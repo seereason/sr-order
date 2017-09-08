@@ -21,7 +21,7 @@ module Data.OrderedMap
     , permute
     , appendItems
     , toList
-    , fromList
+    , fromElements
     , asList
     , find
     , findWithKey
@@ -204,7 +204,7 @@ permute neworder m =
 
 -- | Append several items
 --     λ> let o = (fromPairs [(1,'z')]) in insertItems o ['a','b','c'] :: ([Int], Order Int Char)
---     ([2,3,4],fromMapListKey (fromList [(1,'z'),(2,'a'),(3,'b'),(4,'c')]) ([1,2,3,4]) (5))
+--     ([2,3,4],fromMapListKey (fromPairs [(1,'z'),(2,'a'),(3,'b'),(4,'c')]) ([1,2,3,4]) (5))
 appendItems :: OrderedMap o => o -> [OValue o] -> ([OKey o], o)
 appendItems om xs =
     over _1 reverse $ foldl f ([], om) xs
@@ -216,8 +216,8 @@ toList :: OrderedMap o => o -> [OValue o]
 toList = map snd . toPairs
 
 -- | Build an order from a list of values, allocating new all keys.
-fromList :: OrderedMap o => [OValue o] -> o
-fromList xs = fromPairs (zip (map toEnum [0..]) xs)
+fromElements :: OrderedMap o => [OValue o] -> o
+fromElements xs = fromPairs (zip (map toEnum [0..]) xs)
 
 -- | Perform an operation on a of an OrderedMap's (key, value) pairs,
 -- reassembling the resulting pairs into a new OrderedMap.

@@ -128,7 +128,7 @@ instance (Ord k, Enum k, Eq v, Ord v) => Ord (Order k v) where
 
 instance (Ord k, Enum k, Read v) => Read (Order k v) where
     -- readsPrec :: Int -> String -> [(OrderMap k a, String)]
-    readsPrec _ s = let l = (read s :: [v]) in [(OrderedMap.fromList l, "")]
+    readsPrec _ s = let l = (read s :: [v]) in [(OrderedMap.fromElements l, "")]
 
 instance (Ord k, Enum k, Monoid (Order k v)) => LL.ListLike (Order k v) v where
     uncons m =
