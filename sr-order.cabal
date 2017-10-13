@@ -19,7 +19,6 @@ description:
 library
   hs-source-dirs: src
   build-depends:
-    aeson,
     base >= 4.8 && < 5,
     containers,
     data-default,

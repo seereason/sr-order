@@ -30,7 +30,6 @@ module Data.OrderedMap
     ) where
 
 import Control.Lens (_1, _Just, lens, over, Traversal')
-import Data.Aeson (FromJSON, ToJSON)
 import Data.Data (Data)
 import Data.Default (Default)
 import Data.List as List (elem, filter, notElem, partition)
@@ -44,7 +43,7 @@ data OrderError
     | DuplicateKey
     | OutOfRange Int
     | EmptyOrder -- ^ Expected an order with at least one element
-    deriving (Data, Eq, Ord, Show, Generic, ToJSON, FromJSON)
+    deriving (Data, Eq, Ord, Show, Generic)
 
 -- | Minimum implementation: OKey, OValue
 class (Eq (OKey o), Ord (OKey o), Enum (OKey o), Default o) => OrderedMap o where

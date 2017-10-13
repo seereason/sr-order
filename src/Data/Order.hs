@@ -30,7 +30,6 @@ module Data.Order
     ) where
 
 import Control.Lens (FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), TraversableWithIndex(..), Traversal', _Just, lens, Lens', makeLensesFor, view)
-import Data.Aeson (ToJSON(toJSON), FromJSON(parseJSON))
 import Data.Data (Data)
 import Data.Default (Default(def))
 import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
@@ -104,12 +103,6 @@ instance FoldableWithIndex k (Order k) where
 instance FunctorWithIndex k (Order k) where
     imap f (Order es ks n) = Order (Map.mapWithKey f es) ks n
 
-instance (Ord k, Enum k, ToJSON k, Data v, ToJSON v) => ToJSON (Order k v) where
-  toJSON = toJSON . toPairs
-
-instance (Ord k, Enum k, FromJSON k, Data v, FromJSON v) => FromJSON (Order k v) where
-  parseJSON = fmap fromPairs . parseJSON
-
 instance (Ord k, Enum k, Show k, Show v) => Show (Order k v) where
     show o = "fromMapListKey (" ++ show (toMap o) ++ ") (" ++ show (toKeys o) ++ ") (" ++ show (nextKey o) ++ ")"
     -- show o = "(fromPairs (" ++ show (toPairs o) ++ "))"
@@ -150,7 +143,7 @@ instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v wher
 
 $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 
-data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic, FromJSON, ToJSON)
+data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic)
 
 omapPaths :: (Ord k, Enum k) => Lens' a (Order k v) -> a -> [(k, c -> Path_OMap k c)]
 omapPaths lns a = map (\ (k, _) -> (k, Path_At k)) (toPairs (Control.Lens.view lns a))
