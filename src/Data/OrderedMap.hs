@@ -33,7 +33,7 @@ import Control.Lens (_1, _Just, lens, over, Traversal')
 import Data.Data (Data)
 import Data.Default (Default)
 import Data.List as List (elem, filter, notElem, partition)
-import Data.Map as Map (Map)
+import Data.Map as Map (Map, (!))
 import qualified Data.Map as Map
 import GHC.Generics (Generic)
 
@@ -45,7 +45,7 @@ data OrderError
     | EmptyOrder -- ^ Expected an order with at least one element
     deriving (Data, Eq, Ord, Show, Generic)
 
--- | Minimum implementation: OKey, OValue
+-- | Minimum implementation: OKey, OValue, fromMapListKey, toMap, toKeys, nextKey, newKey
 class (Eq (OKey o), Ord (OKey o), Enum (OKey o), Default o) => OrderedMap o where
     type OKey o
     type OValue o
@@ -70,13 +70,17 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o), Default o) => OrderedMap o wher
     newKey :: o -> (OKey o, o)
 
     empty :: o
+    empty = fromMapAndList mempty mempty
     fromPairs :: [(OKey o, OValue o)] -> o
-    -- | (unsafe)
+    fromPairs ps = fromMapAndList (Map.fromList ps) (fmap fst ps)
+    -- | (unsafe - correspondence between map and list keys not enforced)
     fromMapAndList :: Map (OKey o) (OValue o) -> [OKey o] -> o
-    -- | (unsafe)
+    fromMapAndList mp ks = fromMapListKey mp ks (maximum (toEnum 0 : ks))
+    -- | (even less safe - a bogus next key value could be supplied)
     fromMapListKey :: Map (OKey o) (OValue o) -> [OKey o] -> OKey o -> o
 
     toPairs :: o -> [(OKey o, OValue o)]
+    toPairs o = let mp = toMap o in map (\k -> (k, mp ! k)) (toKeys o)
     toMap :: o -> Map (OKey o) (OValue o)
     -- toMap = Map.fromList . toPairs
     toKeys :: o -> [OKey o]
