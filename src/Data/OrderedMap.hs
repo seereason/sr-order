@@ -55,6 +55,11 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o), Default o) => OrderedMap o wher
 
     lookByKey :: OKey o -> o -> Maybe (OValue o)
     lookByKey k o = Map.lookup k (toMap o)
+    ilookByKey :: OKey o -> o -> Maybe (Int, OValue o)
+    ilookByKey k o =
+        case Map.lookup k (toMap o) of
+          Just v -> Just (length (takeWhile (/= k) (toKeys o)), v)
+          Nothing -> Nothing
     lookByPos :: Int -> o -> Maybe (OKey o, OValue o)
     lookByPos pos o = case drop pos (toKeys o) of
                           k : _ -> fmap (k,) (lookByKey k o)
