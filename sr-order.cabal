@@ -1,5 +1,5 @@
 name:               sr-order
-version:            0.44
+version:            0.45
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3

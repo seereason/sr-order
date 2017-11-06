@@ -55,6 +55,7 @@ class (Eq (OKey o), Ord (OKey o), Enum (OKey o), Default o) => OrderedMap o wher
 
     lookByKey :: OKey o -> o -> Maybe (OValue o)
     lookByKey k o = Map.lookup k (toMap o)
+    -- | Indexed version of lookByKey.
     ilookByKey :: OKey o -> o -> Maybe (Int, OValue o)
     ilookByKey k o =
         case Map.lookup k (toMap o) of
