@@ -29,7 +29,8 @@ module Data.Order
     , module OrderedMap
     ) where
 
-import Control.Lens (FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), TraversableWithIndex(..), Traversal', _Just, lens, Lens', makeLensesFor, view)
+import Control.Lens (FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), Index, Ixed(..), IxValue, (<&>),
+                     TraversableWithIndex(..), Traversal', _Just, lens, Lens', makeLensesFor, view)
 import Data.Data (Data)
 import Data.Default (Default(def))
 import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
@@ -184,3 +185,13 @@ $(deriveLiftMany [''Order])
 #if !__GHCJS__
 $(derivePathInfo ''Path_OMap)
 #endif
+
+type instance IxValue (Order k v) = v
+type instance Index (Order k v) = k
+
+instance (Ord k, Enum k) => Ixed (Order k v) where
+  ix k f o =
+      case Map.lookup k (toMap o) of
+        Just v -> f v <&> \v' -> alter (const (Just v')) k o
+        Nothing -> pure o
+  {-# INLINE ix #-}
