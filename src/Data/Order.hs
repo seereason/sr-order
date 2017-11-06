@@ -72,9 +72,7 @@ data Order k v =
           }
     deriving (Data, Typeable, Generic, Functor)
 
-instance (Enum k, Ord k) => OrderedMap (Order k v) where
-    type OKey (Order k v) = k
-    type OValue (Order k v) = v
+instance (Ixed (Order k v), Enum k, Ord k) => OrderedMap (Order k v) where
     empty = Order mempty mempty (toEnum 0)
     nextKey = next
     toMap = elems
