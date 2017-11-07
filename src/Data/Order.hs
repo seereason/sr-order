@@ -29,7 +29,7 @@ module Data.Order
     , module OrderedMap
     ) where
 
-import Control.Lens (FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), Index, Ixed(..), IxValue, (<&>),
+import Control.Lens (At(..), FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), Index, Ixed(..), IxValue, (<&>),
                      TraversableWithIndex(..), Traversal', _Just, lens, Lens', makeLensesFor, view)
 import Data.Data (Data)
 import Data.Default (Default(def))
@@ -193,3 +193,10 @@ instance (Ord k, Enum k) => Ixed (Order k v) where
         Just v -> f v <&> \v' -> alter (const (Just v')) k o
         Nothing -> pure o
   {-# INLINE ix #-}
+
+instance (Ord k, Enum k) => At (Order k a) where
+  at k f o = f mv <&> \r -> case r of
+    Nothing -> maybe o (const (alter (const Nothing) k o)) mv
+    Just  v' -> alter (const (Just v')) k o
+    where mv = lookByKey k o
+  {-# INLINE at #-}
