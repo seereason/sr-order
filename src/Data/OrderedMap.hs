@@ -36,6 +36,7 @@ import Data.List as List (elem, filter, notElem, partition)
 import Data.Map as Map (Map, (!))
 import qualified Data.Map as Map
 import GHC.Generics (Generic)
+import Language.Haskell.TH.TypeGraph.Serialize (deriveSerialize)
 
 data OrderError
     = InvalidKey
@@ -44,6 +45,8 @@ data OrderError
     | OutOfRange Int
     | EmptyOrder -- ^ Expected an order with at least one element
     deriving (Data, Eq, Ord, Show, Generic)
+
+$(deriveSerialize [t|OrderError|])
 
 -- | Minimum implementation: fromMapListKey, toMap, toKeys, nextKey, newKey
 class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
