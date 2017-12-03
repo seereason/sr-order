@@ -5,6 +5,7 @@ import Data.List (nub, sort)
 import Data.Map as Map
 import Data.Order
 import Data.OrderedMap as OrderedMap
+import Test.HUnit (assertEqual, Counts(..), runTestTT, showCounts, Test(..))
 import Test.QuickCheck
 
 prop_next_exceeds_all_keys :: Order Int String -> Bool
@@ -59,7 +60,16 @@ tests :: IO Bool
 tests = $quickCheckAll
 
 main :: IO ()
-main = tests >> return ()
+main = do
+  tests
+  counts <- runTestTT $ TestList $
+    [TestCase (assertEqual "fromPairs"
+                 (fromMapListKey (fromList [(2,'b'),(3,'a'),(5,'c')]) ([2,3,5]) (6))
+                 (fromPairs [(2,'b'),(3,'a'),(5,'c')] :: Order Int Char))]
+  case counts of
+    Counts {errors = 0, failures = 0} -> putStrLn "OK, passed unit tests"
+    _ -> error (showCounts counts)
+  return ()
     -- $quickCheckAll >>= \r -> putStrLn (show r)
     -- quickCheck (prop_next_exceeds_all_keys :: Order Int String -> Bool)
     -- quickCheck (prop_insert_delete)

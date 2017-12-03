@@ -75,7 +75,7 @@ class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
     fromPairs ps = fromMapAndList (Map.fromList ps) (fmap fst ps)
     -- | (unsafe - correspondence between map and list keys not enforced)
     fromMapAndList :: Map (Index o) (IxValue o) -> [Index o] -> o
-    fromMapAndList mp ks = fromMapListKey mp ks (maximum (toEnum 0 : ks))
+    fromMapAndList mp ks = fromMapListKey mp ks (max (toEnum 0) (succ (maximum ks)))
     -- | (even less safe - a bogus next key value could be supplied)
     fromMapListKey :: Map (Index o) (IxValue o) -> [Index o] -> Index o -> o
 
