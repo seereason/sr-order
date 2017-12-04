@@ -40,6 +40,7 @@ import qualified Data.Map as Map
 import Data.OrderedMap as OrderedMap
 import Data.Proxy (Proxy(Proxy))
 import Data.SafeCopy (SafeCopy(..), base, contain, deriveSafeCopy, safeGet, safePut)
+import Data.Serialize (Serialize(get, put))
 import Data.Set as Set (fromList)
 import Data.Tree (Tree(Node))
 import Data.Typeable (Typeable)
@@ -134,6 +135,10 @@ instance (Ord k, Enum k, Monoid (Order k v)) => LL.ListLike (Order k v) v where
 instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v where
     foldl f r0 xs = List.foldl f r0 (toList xs)
     foldr f r0 xs = List.foldr f r0 (toList xs)
+
+instance (Ord k, Enum k, Serialize k, Serialize e) => Serialize (Order k e) where
+    put o = put (toMap o, toKeys o, nextKey o)
+    get = do (mp, ks, n) <- get; return $ fromMapListKey mp ks n
 
 $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 
