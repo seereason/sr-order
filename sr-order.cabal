@@ -44,7 +44,7 @@ test-suite order-tests
   ghc-options: -Wall
   hs-source-dirs: tests
   main-is: Main.hs
-  build-depends: base, containers, sr-order, QuickCheck
+  build-depends: base, containers, HUnit, sr-order, QuickCheck
 
 source-repository head
   type:     git

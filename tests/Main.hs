@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP, FlexibleInstances, ScopedTypeVariables, TemplateHaskell, TupleSections, TypeFamilies #-}
-{-# OPTIONS -ddump-splices #-}
 
 import Data.List (nub, sort)
 import Data.Map as Map
@@ -44,12 +43,6 @@ prop_insert_delete_pos :: String -> Order Int String -> Property
 prop_insert_delete_pos v o =
     forAll (choose (0, OrderedMap.size o)) $ \pos ->
         (let Right (o', _) = insertAt pos v o in deleteByPos pos o') == Right o
-
-instance Arbitrary (Order Int String) where
-    arbitrary = elements [ fromPairs [(1,"1"), (2, "2"), (3, "3"), (4, "4")]
-                         -- , fromPairs [(1,"1"), (2, "2"), (4, "4")]
-                         -- , fromPairs []
-                         ]
 
 prop_alter_test :: Order Int String -> Bool
 prop_alter_test o =

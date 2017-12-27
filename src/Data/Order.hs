@@ -53,7 +53,7 @@ import Language.Haskell.TH.Lift (deriveLiftMany)
 --import Language.Haskell.TH.TypeGraph.Prelude ({-some Lift instances?-})
 import Prelude hiding (init)
 import Test.QuickCheck (Arbitrary(arbitrary), choose, forAll, Gen, infiniteListOf,
-                        Property, property, quickCheckAll, shuffle, sublistOf)
+                        listOf, Property, property, quickCheckAll, shuffle, sublistOf)
 import Web.Routes.TH (derivePathInfo)
 
 {-
@@ -139,6 +139,9 @@ instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v wher
 instance (Ord k, Enum k, Serialize k, Serialize e) => Serialize (Order k e) where
     put o = put (toMap o, toKeys o, nextKey o)
     get = do (mp, ks, n) <- get; return $ fromMapListKey mp ks n
+
+instance (Enum k, Ord k, Arbitrary v) => Arbitrary (Order k v) where
+    arbitrary = fromElements <$> listOf arbitrary
 
 $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 
