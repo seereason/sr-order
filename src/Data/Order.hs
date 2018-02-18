@@ -102,15 +102,15 @@ instance (Ord k, Enum k, Show k, Show v) => Show (Order k v) where
 
 instance (Ord k, Enum k) => Monoid (Order k v) where
     mempty = empty
-    mappend a b = foldr (\ x m -> fst (append x m)) a (toList b)
+    mappend a b = foldr (\ x m -> fst (append x m)) a (values b)
 
 -- Not sure how correct these three instances are in the presence of
 -- randomly allocated keys and the like.
 instance (Ord k, Enum k, Eq v) => Eq (Order k v) where
-    a == b = toList a == toList b
+    a == b = values a == values b
 
 instance (Ord k, Enum k, Eq v, Ord v) => Ord (Order k v) where
-    compare a b = compare (toList a) (toList b)
+    compare a b = compare (values a) (values b)
 
 instance (Ord k, Enum k, Read v) => Read (Order k v) where
     -- readsPrec :: Int -> String -> [(OrderMap k a, String)]
@@ -131,8 +131,8 @@ instance (Ord k, Enum k, Monoid (Order k v)) => LL.ListLike (Order k v) v where
                _ -> error "OrderMap.tail"
 
 instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v where
-    foldl f r0 xs = List.foldl f r0 (toList xs)
-    foldr f r0 xs = List.foldr f r0 (toList xs)
+    foldl f r0 xs = List.foldl f r0 (values xs)
+    foldr f r0 xs = List.foldr f r0 (values xs)
 
 instance (Ord k, Enum k, Serialize k, Serialize e) => Serialize (Order k e) where
     put o = put (toMap o, toKeys o, nextKey o)

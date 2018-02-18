@@ -20,8 +20,10 @@ module Data.OrderedMap
     , showOrder
     , permute
     , appendItems
+    , values
     , toList
     , fromElements
+    , overPairs
     , asList
     , find
     , findWithKey
@@ -224,8 +226,12 @@ appendItems om xs =
       f (ks, om') x = let (om'', k) = append x om' in ((k : ks), om'')
 
 -- | Return only the values of the order, discarding the keys.
+values :: OrderedMap o => o -> [IxValue o]
+values = fmap snd . toPairs
+
 toList :: OrderedMap o => o -> [IxValue o]
-toList = map snd . toPairs
+toList = fmap snd . toPairs
+{-# DEPRECATED toList "use values" #-}
 
 -- | Build an order from a list of values, allocating new all keys.
 fromElements :: OrderedMap o => [IxValue o] -> o
@@ -233,8 +239,12 @@ fromElements xs = fromPairs (zip (map toEnum [0..]) xs)
 
 -- | Perform an operation on a of an OrderedMap's (key, value) pairs,
 -- reassembling the resulting pairs into a new OrderedMap.
+overPairs :: OrderedMap o => ([(Index o, IxValue o)] -> [(Index o, IxValue o)]) -> o -> o
+overPairs f om = fromPairs . f . toPairs $ om
+
 asList :: OrderedMap o => ([(Index o, IxValue o)] -> [(Index o, IxValue o)]) -> o -> o
-asList f om = fromPairs . f . toPairs $ om
+asList = overPairs
+{-# DEPRECATED asList "Renamed overPairs" #-}
 
 -- | Find the first value (along with the associated key) that
 -- satisfies the predicate.
