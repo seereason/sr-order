@@ -35,6 +35,8 @@ import Data.Default (Default)
 import Data.List as List (elem, filter, notElem, partition)
 import Data.Map as Map (Map, (!))
 import qualified Data.Map as Map
+import Data.SafeCopy (base)
+import Data.SafeCopy.Derive (deriveSafeCopy)
 import GHC.Generics (Generic)
 import Language.Haskell.TH.TypeGraph.Serialize (deriveSerialize)
 
@@ -47,6 +49,7 @@ data OrderError
     deriving (Data, Eq, Ord, Show, Generic)
 
 $(deriveSerialize [t|OrderError|])
+$(deriveSafeCopy 1 'base [t|OrderError|])
 
 -- | Minimum implementation: fromMapListKey, toMap, toKeys, nextKey, newKey
 class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where

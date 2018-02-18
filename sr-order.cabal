@@ -30,7 +30,7 @@ library
     template-haskell,
     th-lift,
     th-lift-instances,
-    th-typegraph,
+    th-typegraph >= 1.4,
     web-routes,
     web-routes-th
   exposed-modules:

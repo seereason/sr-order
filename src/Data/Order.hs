@@ -179,6 +179,9 @@ deriveOrder ityp t supers = do
   omtype <- tySynD mpname [] [t|Order $(conT idname) $(conT t)|]
   return $ [idtype, omtype] ++ insts
 
+#if 0
+$(deriveSafeCopy 0 'base ''Order)
+#else
 instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
     putCopy m = contain $ do safePut (elems m)
                              safePut (order m)
@@ -187,6 +190,10 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
                            order_ <- safeGet
                            next_ <- safeGet
                            return $ Order {elems = elems_, order = order_, next = next_}
+    version = 0
+    kind = base
+    errorTypeName _ = "Order"
+#endif
 
 $(deriveSafeCopy 0 'base ''Path_OMap)
 $(deriveLiftMany [''Order])
