@@ -23,8 +23,6 @@
 
 module Data.Order
     ( Order(..), elemsL, orderL, nextL
-    , omapPaths
-    , Path_OMap(Path_OMap, Path_At)
     , deriveOrder
     , module OrderedMap
     ) where
@@ -145,11 +143,6 @@ instance (Enum k, Ord k, Arbitrary v) => Arbitrary (Order k v) where
 
 $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 
-data Path_OMap k a = Path_OMap | Path_At k a deriving (Eq, Ord, Read, Show, Typeable, Data, Generic)
-
-omapPaths :: (Ord k, Enum k) => Lens' a (Order k v) -> a -> [(k, c -> Path_OMap k c)]
-omapPaths lns a = map (\ (k, _) -> (k, Path_At k)) (toPairs (Control.Lens.view lns a))
-
 -- | Given the name of a type such as AbbrevPair, generate declarations
 -- @@
 --     newtype AbbrevPairID = AbbrevPairID {unAbbrevPairID :: IntJS} deriving (Eq, Ord, Read, Show, Data, Typeable)
@@ -195,11 +188,7 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
     errorTypeName _ = "Order"
 #endif
 
-$(deriveSafeCopy 0 'base ''Path_OMap)
 $(deriveLiftMany [''Order])
-#if !__GHCJS__
-$(derivePathInfo ''Path_OMap)
-#endif
 
 type instance IxValue (Order k v) = v
 type instance Index (Order k v) = k
