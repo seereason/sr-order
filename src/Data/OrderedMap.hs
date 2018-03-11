@@ -15,6 +15,8 @@
 
 module Data.OrderedMap
     ( OrderedMap(..)
+    , fromMapListKey
+    , fromMapAndList
     , OrderError(..)
     , putItem
     , showOrder
@@ -53,7 +55,7 @@ data OrderError
 $(deriveSerialize [t|OrderError|])
 $(deriveSafeCopy 1 'base [t|OrderError|])
 
--- | Minimum implementation: fromMapListKey, toMap, toKeys, nextKey, newKey
+-- | Minimum implementation: fromMapVecKey, toMap, toKeys, nextKey, newKey
 class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
     size :: o -> Int
     size = Map.size . toMap
@@ -75,14 +77,14 @@ class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
     newKey :: o -> (Index o, o)
 
     empty :: o
-    empty = fromMapAndList mempty mempty
+    empty = fromMapAndVec mempty mempty
     fromPairs :: [(Index o, IxValue o)] -> o
-    fromPairs ps = fromMapAndList (Map.fromList ps) (fmap fst ps)
+    fromPairs ps = fromMapAndVec (Map.fromList ps) (fmap fst ps)
     -- | (unsafe - correspondence between map and list keys not enforced)
-    fromMapAndList :: Map (Index o) (IxValue o) -> [Index o] -> o
-    fromMapAndList mp ks = fromMapListKey mp ks (maximum (toEnum 0: fmap succ ks))
+    fromMapAndVec :: Map (Index o) (IxValue o) -> [Index o] -> o
+    fromMapAndVec mp ks = fromMapVecKey mp ks (maximum (toEnum 0: fmap succ ks))
     -- | (even less safe - a bogus next key value could be supplied)
-    fromMapListKey :: Map (Index o) (IxValue o) -> [Index o] -> Index o -> o
+    fromMapVecKey :: Map (Index o) (IxValue o) -> [Index o] -> Index o -> o
 
     toPairs :: o -> [(Index o, IxValue o)]
     toPairs o = let mp = toMap o in map (\k -> (k, mp ! k)) (toKeys o)
@@ -94,12 +96,12 @@ class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
     -- | Set the value associated with a key.  If the key is not
     -- present a new entry is created (where?)
     alter :: (Maybe (IxValue o) -> Maybe (IxValue o)) -> Index o -> o -> o
-    alter f k o = fromMapListKey (Map.alter f k (toMap o)) (toKeys o) (nextKey o)
+    alter f k o = fromMapVecKey (Map.alter f k (toMap o)) (toKeys o) (nextKey o)
 
     -- | Unsafe permute function - does not check whether first argument
     -- is a permutation of the existing keys.
     permuteUnsafe :: [Index o] -> o -> o
-    permuteUnsafe keys o = fromMapListKey (toMap o) keys (nextKey o)
+    permuteUnsafe keys o = fromMapVecKey (toMap o) keys (nextKey o)
 
     -- | Move the head element to a specified position.
     moveHeadUnsafe :: Int -> o -> o
@@ -126,7 +128,7 @@ class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
     -- | Delete if present
     deleteByKeyMaybe :: Index o -> o -> o
     deleteByKeyMaybe k o =
-        fromMapListKey (Map.delete k (toMap o)) (filter (/= k) (toKeys o)) (nextKey o)
+        fromMapVecKey (Map.delete k (toMap o)) (filter (/= k) (toKeys o)) (nextKey o)
     deleteByKey :: Index o -> o -> Either OrderError o
     deleteByKey k o =
         maybe (Left (InvalidKey {-k o-}))
@@ -154,7 +156,7 @@ class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
     prependWithKeyUnsafe :: Index o -> IxValue o -> o -> o
     prependWithKeyUnsafe k _ o | Map.member k (toMap o) = error "prependWithKey"
     prependWithKeyUnsafe k v o =
-        fromMapListKey (Map.insert k v (toMap o)) (k : toKeys o) (max (succ k) (nextKey o))
+        fromMapVecKey (Map.insert k v (toMap o)) (k : toKeys o) (max (succ k) (nextKey o))
 
     -- | Insert an element at a specific position.
     insertAtUnsafe :: Int -> IxValue o -> o -> (o, Index o)
@@ -183,6 +185,13 @@ class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
     appendWithKey :: Index o -> IxValue o -> o -> Either OrderError o
     appendWithKey k _ o | Map.member k (toMap o) = Left (DuplicateKey {-k o-})
     appendWithKey k v o = Right (appendWithKeyUnsafe k v o)
+
+-- These are provided for backwards compatibility, in anticipation of
+-- switching the List field of Order to a Vector.
+fromMapAndList :: forall o. OrderedMap o => Map (Index o) (IxValue o) -> [Index o] -> o
+fromMapAndList = fromMapAndVec
+fromMapListKey :: forall o. OrderedMap o => Map (Index o) (IxValue o) -> [Index o] -> Index o -> o
+fromMapListKey = fromMapVecKey
 
 -- | Update the value of an existing item
 putItem :: OrderedMap o => Index o -> IxValue o -> o -> o
@@ -213,12 +222,12 @@ permute neworder m =
       reorder (valid, _missing, invalid) =
           let (validmap, missingmap) = Map.partitionWithKey (\ k _ -> List.elem k valid) (toMap m) in
           if Map.null missingmap && null invalid
-          then Right (fromMapAndList validmap valid)
+          then Right (fromMapAndVec validmap valid)
           else Left InvalidPermutation
 
 -- | Append several items
 --     λ> let o = (fromPairs [(1,'z')]) in insertItems o ['a','b','c'] :: ([Int], Order Int Char)
---     ([2,3,4],fromMapListKey (fromPairs [(1,'z'),(2,'a'),(3,'b'),(4,'c')]) ([1,2,3,4]) (5))
+--     ([2,3,4],fromMapVecKey (fromPairs [(1,'z'),(2,'a'),(3,'b'),(4,'c')]) ([1,2,3,4]) (5))
 appendItems :: OrderedMap o => o -> [IxValue o] -> ([Index o], o)
 appendItems om xs =
     over _1 reverse $ foldl f ([], om) xs

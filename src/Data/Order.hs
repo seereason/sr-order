@@ -77,7 +77,7 @@ instance (Ixed (Order k v), Enum k, Ord k) => OrderedMap (Order k v) where
     toMap = elems
     toKeys = order
     newKey o = (next o, o {next = succ (next o)})
-    fromMapListKey mp ks k = Order { elems = mp, order = ks, next = k}
+    fromMapVecKey mp ks k = Order { elems = mp, order = ks, next = k}
 
 instance (Enum k, Ord k) => Default (Order k v) where
     def = empty
