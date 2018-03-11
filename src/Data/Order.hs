@@ -97,7 +97,7 @@ instance FunctorWithIndex k (Order k) where
     imap f (Order es ks n) = Order (Map.mapWithKey f es) ks n
 
 instance (Ord k, Enum k, Show k, Show v) => Show (Order k v) where
-    show o = "fromMapListKey (" ++ show (toMap o) ++ ") (" ++ show (toKeys o) ++ ") (" ++ show (nextKey o) ++ ")"
+    show o = "fromMapVecKey (" ++ show (toMap o) ++ ") (" ++ show (toKeys o) ++ ") (" ++ show (nextKey o) ++ ")"
     -- show o = "(fromPairs (" ++ show (toPairs o) ++ "))"
 
 instance (Ord k, Enum k) => Monoid (Order k v) where
@@ -136,7 +136,7 @@ instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v wher
 
 instance (Ord k, Enum k, Serialize k, Serialize e) => Serialize (Order k e) where
     put o = put (toMap o, toKeys o, nextKey o)
-    get = do (mp, ks, n) <- get; return $ fromMapListKey mp ks n
+    get = do (mp, ks, n) <- get; return $ fromMapVecKey mp ks n
 
 instance (Enum k, Ord k, Arbitrary v) => Arbitrary (Order k v) where
     arbitrary = fromElements <$> listOf arbitrary
