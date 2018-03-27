@@ -40,9 +40,9 @@ import Data.List as List (elem, filter, notElem, partition)
 import Data.Map as Map (Map, (!))
 import qualified Data.Map as Map
 import Data.SafeCopy (base)
-import Data.SafeCopy.Derive (deriveSafeCopy)
+import Data.THUnify.SafeCopy (deriveSafeCopy)
+import Data.THUnify.Serialize (deriveSerialize)
 import GHC.Generics (Generic)
-import Language.Haskell.TH.TypeGraph.Serialize (deriveSerialize)
 
 data OrderError
     = InvalidKey
