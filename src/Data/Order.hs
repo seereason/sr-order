@@ -138,8 +138,8 @@ instance (Ord k, Enum k, Serialize k, Serialize e) => Serialize (Order k e) wher
     put o = put (toMap o, toKeys o, nextKey o)
     get = do (mp, ks, n) <- get; return $ fromMapVecKey mp ks n
 
-instance (Enum k, Ord k, Arbitrary v) => Arbitrary (Order k v) where
-    arbitrary = fromElements <$> listOf arbitrary
+instance (Enum k, Ord k, Arbitrary v, Arbitrary k) => Arbitrary (Order k v) where
+    arbitrary = (fromPairs . LL.fromList) <$> listOf arbitrary
 
 $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
 

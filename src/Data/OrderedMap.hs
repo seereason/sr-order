@@ -36,7 +36,7 @@ module Data.OrderedMap
 import Control.Lens (_1, Ixed, Index, IxValue, _Just, lens, over, Traversal')
 import Data.Data (Data)
 import Data.Default (Default)
-import Data.List as List (elem, filter, notElem, partition)
+import Data.List as List (elem, filter, notElem, nub, partition)
 import Data.Map as Map (Map, (!))
 import qualified Data.Map as Map
 import Data.SafeCopy (base)
@@ -78,8 +78,11 @@ class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where
 
     empty :: o
     empty = fromMapAndVec mempty mempty
+    -- | Multiple keys are handled so that result is what Data.map.fromList
+    -- would produce: later occurrences of a key override earlier.
     fromPairs :: [(Index o, IxValue o)] -> o
-    fromPairs ps = fromMapAndVec (Map.fromList ps) (fmap fst ps)
+    fromPairs ps = fromMapAndVec (Map.fromList ps) (rnub (fmap fst ps))
+        where rnub = reverse . nub . reverse
     -- | (unsafe - correspondence between map and list keys not enforced)
     fromMapAndVec :: Map (Index o) (IxValue o) -> [Index o] -> o
     fromMapAndVec mp ks = fromMapVecKey mp ks (maximum (toEnum 0: fmap succ ks))
