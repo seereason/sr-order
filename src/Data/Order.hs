@@ -82,17 +82,18 @@ instance (Ixed (Order k v), Enum k, Ord k) => OrderedMap (Order k v) where
 instance (Enum k, Ord k) => Default (Order k v) where
     def = empty
 
-instance Traversable (Order k) where
+instance Ord k => Traversable (Order k) where
     traverse f (Order es ks n) = Order <$> traverse f es <*> pure ks <*> pure n
 
-instance TraversableWithIndex k (Order k) where
+instance Ord k => TraversableWithIndex k (Order k) where
     itraverse f (Order es ks n) = Order <$> itraverse f es <*> pure ks <*> pure n
 
-instance Foldable (Order k) where
-    foldMap f (Order es ks n) = foldMap f es
-
-instance FoldableWithIndex k (Order k) where
-    ifoldMap f (Order es ks n) = ifoldMap f es
+-- Make sure that Foldable.toList gives us the key order,
+-- rather than the order returned by Map.toList.
+instance Ord k => Foldable (Order k) where
+    foldMap f (Order es ks n) = foldMap (\k -> f (es ! k)) ks
+instance Ord k => FoldableWithIndex k (Order k) where
+    ifoldMap f (Order es ks n) = foldMap (\k -> f k (es ! k)) ks
 instance FunctorWithIndex k (Order k) where
     imap f (Order es ks n) = Order (Map.mapWithKey f es) ks n
 
