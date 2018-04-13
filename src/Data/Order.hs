@@ -1,209 +1,234 @@
--- | The prototypical instance of OrderedMap, a data structure that
--- combines a 'Map' @k@ @v@ with a list of @k@, representing the
--- element order.  This means the @[k]@ can be reordered without
--- invalidating any @k@ values that might be in use.  This is useful
--- for collaborative systems where one person might reorder a list
--- while another person is modifying one of its elements.
-
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS -Wall #-}
+
+-- | A combination of a Map and a Vector - that is, each element of the
+-- Map has a unique sequence number between zero and the number of
+-- elements in the map, and this sequence can be modified.  There is a
+-- ListLike instance that treats it as a sequence of (k, a) pairs.
 
 module Data.Order
-    ( Order(..), elemsL, orderL, nextL
-    , deriveOrder
-    , module OrderedMap
+    ( Order(Order)
+    -- * Lenses
+    , map, vec
+    -- * Sequence access
+    , keys, values
+    -- * Map over keys
+    , mapKeys
+    -- * Key operations
+    , member, delete
+    -- * Positional operations
+    , Data.Order.insertAt
+    , Data.Order.deleteAt
+    , Data.Order.splitAt
+    , append, prepend
+    -- * QuickCheck property
+    , prop_same_keys
     ) where
 
-import Control.Lens (At(..), FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), Index, Ixed(..), IxValue, (<&>),
-                     TraversableWithIndex(..), Traversal', _Just, lens, Lens', makeLensesFor, view)
+import Control.Lens
 import Data.Data (Data)
-import Data.Default (Default(def))
-import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
+import qualified Data.Foldable as Foldable
+import Data.Foldable as Foldable hiding (toList)
 import qualified Data.ListLike as LL
-import Data.Map as Map ((!), Map)
-import qualified Data.Map as Map
-import Data.OrderedMap as OrderedMap
-import Data.Proxy (Proxy(Proxy))
-import Data.SafeCopy (SafeCopy(..), base, contain, deriveSafeCopy, safeGet, safePut)
+import Data.ListLike as LL (ListLike, FoldableLL, fromListLike, nub, sort, zip)
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict as Map ((!), Map, mapWithKey)
+import Data.Monoid
+import Data.SafeCopy (base, contain, deriveSafeCopy, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
+import Data.Sequence hiding (fromList, length, splitAt, sort, zip)
+import qualified Data.Sequence as Sequence
 import Data.Serialize (Serialize(get, put))
-import Data.Set as Set (fromList)
-import Data.Tree (Tree(Node))
-import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
+-- import Data.Traversable as Traversable
+import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
+import qualified Data.Vector as Vector
+import GHC.Generics
 import Instances.TH.Lift ()
-import Language.Haskell.TH
--- import Language.Haskell.TH.Path.Core (Describe(..), IsPath(..), makeCol, makeRow, makeTrees, PathStart(..), Peek(..), U(u, unU'))
--- import Language.Haskell.TH.Path.GHCJS (SafeCopy(..), base, contain, deriveSafeCopy, safeGet, safePut)
 import Language.Haskell.TH.Lift (deriveLiftMany)
---import Language.Haskell.TH.TypeGraph.Prelude ({-some Lift instances?-})
-import Prelude hiding (init)
-import Test.QuickCheck (Arbitrary(arbitrary), choose, forAll, Gen, infiniteListOf,
-                        listOf, Property, property, quickCheckAll, shuffle, sublistOf)
-import Web.Routes.TH (derivePathInfo)
+import Prelude hiding (foldMap, length, map, splitAt, zip)
+import Test.QuickCheck (Arbitrary(arbitrary), shuffle, sized, vector, vectorOf)
 
-{-
-bang :: (Eq k, Ord k, Show k, Show v) => String -> Map k v -> k -> v
-bang s mp k = case Map.lookup k mp of
-             Nothing -> error $ s ++ " " ++ show mp ++ " ! " ++ show k
-             Just v -> v
--}
-
-data Order k v =
-    Order { elems :: Map k v
-          -- ^ Return the key-value map
-          , order :: [k]
-          -- ^ Return the list of keys in order.
-          , next :: k
-          -- ^ Next available key
-          }
+data Order_0 k v =
+    Order_0 (Map k v) [k] k
     deriving (Data, Typeable, Generic, Functor)
 
-instance (Ixed (Order k v), Enum k, Ord k) => OrderedMap (Order k v) where
-    empty = Order mempty mempty (toEnum 0)
-    nextKey = next
-    toMap = elems
-    toKeys = order
-    newKey o = (next o, o {next = succ (next o)})
-    fromMapVecKey mp ks k = Order { elems = mp, order = ks, next = k}
+-- type L a = [a]
+type L a = Seq a
+-- type L a = Vector a
 
-instance (Enum k, Ord k) => Default (Order k v) where
-    def = empty
+data Order k v =
+  Order
+    { _map :: Map k v
+    , _vec :: L k
+    } deriving (Data, Typeable, Generic, Functor, Read)
 
+instance (SafeCopy k, SafeCopy v, Ord k, Enum k) => Migrate (Order k v) where
+  type MigrateFrom (Order k v) = Order_0 k v
+  migrate (Order_0 mp ks _) = Order mp (fromListLike ks)
+
+instance (Ord k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
+    show o = "fromListLike " ++ show (LL.fromListLike o :: [(k, v)]) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
+
+$(makeLenses ''Order)
+
+splitAt :: Ord k => Int -> Order k a -> (Order k a, Order k a)
+splitAt n = over _1 LL.fromListLike . over _2 LL.fromListLike . Vector.splitAt n . LL.fromListLike
+
+insertAt :: Ord k => Int -> (k, a) -> Order k a -> Order k a
+insertAt n (k, a) = uncurry (<>) . over _2 (prepend (k, a)) . splitAt n
+
+deleteAt :: Ord k => Int -> Order k a -> Order k a
+deleteAt n = uncurry (<>) . over _2 (LL.drop 1) . LL.splitAt n
+
+append :: Ord k => (k, a) -> Order k a -> Order k a
+append (k, a) m = insertAt (length m) (k, a) m
+
+prepend :: Ord k => (k, a) -> Order k a -> Order k a
+prepend (k, a) (Order m v) = Order (Map.insert k a m) (LL.cons k v)
+
+keys :: Order k a -> L k
+keys = _vec
+
+values :: Ord k => Order k a -> L a
+values x = fmap (\k -> _map x ! k) (keys x)
+
+prop_same_keys :: Order Int String -> Bool
+prop_same_keys o = sort (LL.fromListLike (_vec o) :: [Int]) == sort (nub (Map.keys (_map o) :: [Int]))
+
+-- | Based on Data.Map.mapKeys
+mapKeys :: Ord k2 => (k1 -> k2) -> Order k1 a -> Order k2 a
+mapKeys f (Order m v) = Order (Map.mapKeys f m) (fmap f v)
+
+member :: Ord k => k -> Order k v -> Bool
+member k o = Map.member k (_map o)
+
+-- | Based on Data.Map.delete
+delete :: Ord k => k -> Order k a -> Order k a
+delete k (Order m v) =
+    if Map.member k m
+    then Order (Map.delete k m) (Sequence.filter (/= k) v)
+    else Order m v
+
+instance (Ord k, Eq v) => Eq (Order k v) where
+  a == b = _map a == _map b && _vec a == _vec b
+
+instance (Ord k, Eq v, Ord v) => Ord (Order k v) where
+    compare a b = compare (_vec a) (_vec b) <> compare (_map a) (_map b)
+
+instance Ord k => Monoid (Order k v) where
+    mempty = Order mempty mempty
+    mappend a b = Order (mappend (_map a) (_map b)) (_vec a <> _vec b)
+    -- ^ If there are any common @k@ values in the shared
+    -- map the elements from the second is omitted.  For
+    -- this reason it is suggested that, when in doubt,
+    -- the @k@ type be mapped to @Either k k@:
+    -- @@
+    --   mapKeys Left a <> mapKeys Right b
+    -- @@
+
+-- @@
+-- λ> traverse (++ "!") (fromList
+-- @@
 instance Ord k => Traversable (Order k) where
-    traverse f (Order es ks n) = Order <$> traverse f es <*> pure ks <*> pure n
+    traverse f (Order m v) = Order <$> traverse f m <*> pure v
 
 instance Ord k => TraversableWithIndex k (Order k) where
-    itraverse f (Order es ks n) = Order <$> itraverse f es <*> pure ks <*> pure n
+    itraverse f (Order m v) = Order <$> itraverse f m <*> pure v
 
--- Make sure that Foldable.toList gives us the key order,
--- rather than the order returned by Map.toList.
+-- Fold over the values only
+-- @@
+-- λ> foldMap id (fromList [(1, "a"), (2, "b")])
+-- "ab"
+-- @@
 instance Ord k => Foldable (Order k) where
-    foldMap f (Order es ks n) = foldMap (\k -> f (es ! k)) ks
+    foldMap f (Order m v) = foldMap (\k -> f (m ! k)) v
+
+-- Fold over keys and values
+-- @@
+-- λ> ifoldMap (\k v-> show k ++ v) (fromList [(2, "a"), (5, "b")])
+-- "2a5b"
+-- @@
 instance Ord k => FoldableWithIndex k (Order k) where
-    ifoldMap f (Order es ks n) = foldMap (\k -> f k (es ! k)) ks
+    ifoldMap f (Order m v) = foldMap (\k -> f k (m ! k)) v
+
+-- @@
+-- λ> ifoldMap (\k v-> LL.concat (LL.replicate k v :: [String])) (fromPairs (LL.fromList [(2, "a"), (5, "b")]))
+-- "aabbbbb"
+-- @@
 instance FunctorWithIndex k (Order k) where
-    imap f (Order es ks n) = Order (Map.mapWithKey f es) ks n
+    imap f (Order m v) = Order (Map.mapWithKey f m) v
 
-instance (Ord k, Enum k, Show k, Show v) => Show (Order k v) where
-    show o = "fromMapVecKey (" ++ show (toMap o) ++ ") (" ++ show (toKeys o) ++ ") (" ++ show (nextKey o) ++ ")"
-    -- show o = "(fromPairs (" ++ show (toPairs o) ++ "))"
+instance (Ord k, Serialize k, Serialize v) => Serialize (Order k v) where
+    put o = put (_map o, _vec o)
+    get = do (m, v) <- get; return $ Order m v
 
-instance (Ord k, Enum k) => Monoid (Order k v) where
-    mempty = empty
-    mappend a b = foldr (\ x m -> fst (append x m)) a (values b)
+instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
+  arbitrary = do
+      (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
+      let ks' = nub ks
+      vs <- vector (length ks')
+      return (LL.fromList (zip ks' vs))
 
--- Not sure how correct these three instances are in the presence of
--- randomly allocated keys and the like.
-instance (Ord k, Enum k, Eq v) => Eq (Order k v) where
-    a == b = values a == values b
-
-instance (Ord k, Enum k, Eq v, Ord v) => Ord (Order k v) where
-    compare a b = compare (values a) (values b)
-
-instance (Ord k, Enum k, Read v) => Read (Order k v) where
-    -- readsPrec :: Int -> String -> [(OrderMap k a, String)]
-    readsPrec _ s = let l = (read s :: [v]) in [(OrderedMap.fromElements l, "")]
-
-instance (Ord k, Enum k, Monoid (Order k v)) => LL.ListLike (Order k v) v where
+instance (Ord k, Monoid (Order k v)) => LL.ListLike (Order k v) (k, v) where
     uncons m =
-        case toKeys m of
-          [] -> Nothing
-          (hd : tl) -> Just (elems m ! hd, m {order = tl, elems = Map.delete hd (elems m), next = next m})
-    null = null . order
-    singleton x = fst $ append x empty
-    head m = case order m of
-               (hd : _) -> elems m ! hd
+        case LL.uncons (keys m) of
+          Nothing -> Nothing
+          Just (k, ks) -> Just ((k, _map m ! k), Order {_map = Map.delete k (_map m), _vec = ks})
+    null = Map.null . _map
+    singleton (k, a) = Order {_map = Map.singleton k a, _vec = singleton k}
+{-
+    head m = case uncons (order m) of
+               Just (hd, _) -> elems m ! hd
                _ -> error "OrderMap.head"
-    tail m = case order m of
-               (hd : tl) -> m {order = tl, elems = Map.delete hd (elems m), next = next m}
+    tail m = case uncons (order m) of
+               Just (hd, tl) -> m {order = tl, elems = Map.delete hd (elems m), next = next m}
                _ -> error "OrderMap.tail"
+-}
 
-instance (Ord k, Enum k, Monoid (Order k v)) => LL.FoldableLL (Order k v) v where
-    foldl f r0 xs = List.foldl f r0 (values xs)
-    foldr f r0 xs = List.foldr f r0 (values xs)
-
-instance (Ord k, Enum k, Serialize k, Serialize e) => Serialize (Order k e) where
-    put o = put (toMap o, toKeys o, nextKey o)
-    get = do (mp, ks, n) <- get; return $ fromMapVecKey mp ks n
-
-instance (Enum k, Ord k, Arbitrary v, Arbitrary k) => Arbitrary (Order k v) where
-    arbitrary = (fromPairs . LL.fromList) <$> listOf arbitrary
-
-$(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order)
-
--- | Given the name of a type such as AbbrevPair, generate declarations
--- @@
---     newtype AbbrevPairID = AbbrevPairID {unAbbrevPairID :: IntJS} deriving (Eq, Ord, Read, Show, Data, Typeable)
---     type AbbrevPairs = Order AbbrevPairID AbbrevPair
---     instance Enum AbbrevPairID where
---       toEnum = AbbrevPairID . toEnum
---       fromEnum = fromEnum . unAbbrevPairID
--- @@
-deriveOrder :: TypeQ -> Name -> [Name] -> Q [Dec]
-deriveOrder ityp t supers = do
-  let idname = mkName (nameBase t ++ "ID")
-      unname = mkName ("un" ++ nameBase t ++ "ID")
-      mpname = mkName (nameBase t ++ "s")
-#if MIN_VERSION_template_haskell(2,12,0)
-  idtype <- newtypeD (cxt []) idname [] Nothing (recC idname [varStrictType unname (strictType notStrict ityp) ]) [derivClause Nothing (map conT $ [''Eq, ''Ord, ''Read, ''Show, ''Data, ''Typeable] ++ supers)]
-#elif MIN_VERSION_template_haskell(2,11,0)
-  idtype <- newtypeD (cxt []) idname [] Nothing (recC idname [varStrictType unname (strictType notStrict ityp) ]) (sequence $ map conT $ [''Eq, ''Ord, ''Read, ''Show, ''Data, ''Typeable] ++ supers)
-#else
-  idtype <- newtypeD (cxt []) idname [] (recC idname [varStrictType unname (strictType notStrict ityp) ]) ([''Eq, ''Ord, ''Read, ''Show, ''Data, ''Typeable] ++ supers)
-#endif
-  insts <- [d| instance Enum $(conT idname) where
-                 toEnum = $(conE idname) . toEnum
-                 fromEnum = fromEnum . $(varE unname) |]
-  -- It would be nice to build the PathInfo instance for idname, but a
-  -- call to derivePathInfo would try to reify it, and its too soon
-  -- for that.
-  omtype <- tySynD mpname [] [t|Order $(conT idname) $(conT t)|]
-  return $ [idtype, omtype] ++ insts
+instance (Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
+    foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _map xs ! k)) r0 (_vec xs)
+    foldr f r0 xs = Foldable.foldr (\k r -> f (k, _map xs ! k) r) r0 (_vec xs)
 
 #if 0
-$(deriveSafeCopy 0 'base ''Order)
+-- Could not deduce (Ord k) arising from a use of ‘getSafeGet’
+$(deriveSafeCopy 0 'base ''Order_0)
+-- Could not deduce (Ord k) arising from a use of ‘extension’
+$(deriveSafeCopy 1 'extension ''Order)
 #else
-instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
-    putCopy m = contain $ do safePut (elems m)
-                             safePut (order m)
-                             safePut (next m)
-    getCopy = contain $ do elems_ <- safeGet
-                           order_ <- safeGet
-                           next_ <- safeGet
-                           return $ Order {elems = elems_, order = order_, next = next_}
+instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order_0 k a) where
+    putCopy (Order_0 elems_ order_ next_) =
+        contain $ do safePut elems_
+                     safePut order_
+                     safePut next_
+    getCopy =
+        contain $ do elems_ <- safeGet
+                     order_ <- safeGet
+                     next_ <- safeGet
+                     return $ Order_0 elems_ order_ next_
     version = 0
     kind = base
+    errorTypeName _ = "Order_0"
+
+instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
+    putCopy (Order m v) =
+        contain $ do safePut m
+                     safePut v
+    getCopy =
+        contain $ do m <- safeGet
+                     v <- safeGet
+                     return $ Order m v
+    version = 1
+    kind = extension
     errorTypeName _ = "Order"
 #endif
 
-$(deriveLiftMany [''Order])
-
-type instance IxValue (Order k v) = v
-type instance Index (Order k v) = k
-
-instance (Ord k, Enum k) => Ixed (Order k v) where
-  ix k f o =
-      case Map.lookup k (toMap o) of
-        Just v -> f v <&> \v' -> alter (const (Just v')) k o
-        Nothing -> pure o
-  {-# INLINE ix #-}
-
-instance (Ord k, Enum k) => At (Order k a) where
-  at k f o = f mv <&> \r -> case r of
-    Nothing -> maybe o (const (alter (const Nothing) k o)) mv
-    Just  v' -> alter (const (Just v')) k o
-    where mv = lookByKey k o
-  {-# INLINE at #-}
+$(deriveLiftMany [''Order_0, ''Order])
