@@ -11,6 +11,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS -Wall #-}
 
@@ -26,9 +27,10 @@ module Data.Order
     , map, vec
     -- * Operators
     , keys, values, pos, lookup, ilookup, view
-    , mapKeys
+    , next, mapKeys
     , member, delete, permute
     -- * Positional operations
+    , lookupKey, lookupPair
     , insertAt
     , deleteAt
     , splitAt
@@ -45,7 +47,7 @@ import Data.Foldable as Foldable hiding (toList)
 import qualified Data.ListLike as LL
 import Data.ListLike as LL (filter, ListLike, FoldableLL, fromListLike, nub, sort, zip)
 import qualified Data.Map.Strict as Map
-import Data.EnumMap as EnumMap ((!), EnumMap, fromList, mapWithKey)
+import Data.EnumMap as EnumMap ((!), EnumMap, fromList, mapWithKey, maxViewWithKey)
 import qualified Data.EnumMap as EnumMap
 import Data.Monoid
 import Data.Order_0
@@ -81,6 +83,16 @@ instance (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order 
 
 $(makeLenses ''Order)
 
+-- | Lookup key by position.  A lookup function appears in
+-- containers in version 0.5.8.
+lookupKey :: Enum k => Int -> Order k a -> Maybe k
+lookupKey i o | i < 0 || i >= length (keys o) = Nothing
+lookupKey i o = Just (Sequence.index (keys o) i)
+
+-- | Lookup pair by position
+lookupPair :: (Enum k, Ord k) => Int -> Order k a  -> Maybe (k, a)
+lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (lookup k o))
+
 splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
 splitAt n = over _1 LL.fromListLike . over _2 LL.fromListLike . Vector.splitAt n . LL.fromListLike
 
@@ -99,6 +111,10 @@ prepend (k, a) (Order m v) = Order (EnumMap.insert k a m) (LL.cons k v)
 -- | Return the keys in order.
 keys :: Order k a -> L k
 keys = _vec
+
+-- | Return the next available key
+next :: Enum k => Order k a -> k
+next o = maybe (toEnum 0) (succ . fst . fst) (maxViewWithKey (_map o))
 
 -- | Return the position of a key, Nothing if absent.
 pos :: Eq k => k -> Order k a -> Maybe Int
