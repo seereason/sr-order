@@ -29,9 +29,9 @@ module Data.Order
     , mapKeys
     , member, delete, permute
     -- * Positional operations
-    , Data.Order.insertAt
-    , Data.Order.deleteAt
-    , Data.Order.splitAt
+    , insertAt
+    , deleteAt
+    , splitAt
     , append, prepend
     -- * Allocate new keys
     -- * QuickCheck property

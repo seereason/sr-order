@@ -40,8 +40,8 @@ import Data.List as List (elem, filter, notElem, nub, partition)
 import Data.Map as Map (Map, (!))
 import qualified Data.Map as Map
 import Data.SafeCopy (base)
+import Data.Serialize (Serialize)
 import Data.THUnify.SafeCopy (deriveSafeCopy)
-import Data.THUnify.Serialize (deriveSerialize)
 import GHC.Generics (Generic)
 
 data OrderError
@@ -50,9 +50,8 @@ data OrderError
     | DuplicateKey
     | OutOfRange Int
     | EmptyOrder -- ^ Expected an order with at least one element
-    deriving (Data, Eq, Ord, Show, Generic)
+    deriving (Data, Eq, Ord, Show, Generic, Serialize)
 
-$(deriveSerialize [t|OrderError|])
 $(deriveSafeCopy 1 'base [t|OrderError|])
 
 -- | Minimum implementation: fromMapVecKey, toMap, toKeys, nextKey, newKey
