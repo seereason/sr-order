@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP, FlexibleInstances, ScopedTypeVariables, TemplateHaskell, TupleSections, TypeFamilies #-}
 
-import Data.Foldable as Foldable
 import Data.ListLike as LL hiding (length, fromList, putStrLn)
-import Data.Map as Map
 import Data.Order
 import Test.HUnit (assertEqual, Counts(..), runTestTT, showCounts, Test(..))
 import Test.QuickCheck

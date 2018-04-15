@@ -23,6 +23,7 @@ library
     cereal,
     containers,
     data-default,
+    EnumMap,
     lens,
     ListLike,
     QuickCheck,
@@ -36,6 +37,8 @@ library
     web-routes-th
   exposed-modules:
     Data.Order
+    Data.Order_0
+    Data.OrderedMap
   default-language: Haskell2010
 
 test-suite order-tests
