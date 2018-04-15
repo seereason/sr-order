@@ -23,7 +23,6 @@ library
     cereal,
     containers,
     data-default,
-    EnumMap,
     lens,
     ListLike,
     QuickCheck,
@@ -36,6 +35,7 @@ library
     web-routes,
     web-routes-th
   exposed-modules:
+    Data.EnumMap
     Data.Order
     Data.Order_0
     Data.OrderedMap

@@ -44,9 +44,8 @@ import qualified Data.Foldable as Foldable
 import Data.Foldable as Foldable hiding (toList)
 import qualified Data.ListLike as LL
 import Data.ListLike as LL (filter, ListLike, FoldableLL, fromListLike, nub, sort, zip)
-import Data.Map.Strict as Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.EnumMap as EnumMap ((!), EnumMap(..), fromList, mapWithKey)
+import Data.EnumMap as EnumMap ((!), EnumMap, fromList, mapWithKey)
 import qualified Data.EnumMap as EnumMap
 import Data.Monoid
 import Data.Order_0
@@ -117,7 +116,7 @@ prop_same_keys o = sort (LL.fromListLike (_vec o) :: [Int]) == sort (nub (EnumMa
 
 -- | Based on Data.Map.mapKeys
 mapKeys :: (Enum k1, Enum k2, Ord k2) => (k1 -> k2) -> Order k1 a -> Order k2 a
-mapKeys f (Order m v) = Order (EnumMap.mapKeys f m) (fmap f v)
+mapKeys f (Order m v) = Order m (fmap f v)
 
 -- | Like Map.lookup.
 lookup :: (Enum k, Ord k) => k -> Order k a -> Maybe a
@@ -171,7 +170,7 @@ instance (Enum k, Ord k) => Traversable (Order k) where
     traverse f (Order m v) = Order <$> traverse f m <*> pure v
 
 instance (Enum k, Ord k) => TraversableWithIndex k (Order k) where
-    itraverse f (Order m v) = Order <$> itraverse f m <*> pure v
+    itraverse f (Order m v) = Order <$> itraverse (\k a -> f (toEnum k) a) m <*> pure v
 
 -- Fold over the values only
 -- @@
@@ -268,6 +267,6 @@ permute neworder (Order m _v) =
       missing :: L k
       missing = LL.fromList (EnumMap.keys (LL.foldr EnumMap.delete m present))
 
-deriving instance Serialize v => Serialize (EnumMap k v)
-$(deriveLiftMany [''EnumMap])
-$(deriveSafeCopy 1 'base ''EnumMap)
+-- deriving instance Serialize v => Serialize (EnumMap k v)
+-- $(deriveLiftMany [''EnumMap])
+-- $(deriveSafeCopy 1 'base ''EnumMap)
