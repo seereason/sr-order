@@ -26,13 +26,13 @@ module Data.Order
     -- * Lenses
     , map, vec
     -- * Operators
-    , keys, values, pos, lookup, ilookup, view
-    , next, mapKeys
+    , keys, values, pos, Data.Order.lookup, ilookup, view
+    , Data.Order.next, mapKeys
     , member, delete, permute
     -- * Positional operations
     , lookupKey, lookupPair
-    , insertAt
-    , deleteAt
+    , Data.Order.insertAt
+    , Data.Order.deleteAt
     , splitAt
     , append, prepend
     -- * Allocate new keys
@@ -91,7 +91,7 @@ lookupKey i o = Just (Sequence.index (keys o) i)
 
 -- | Lookup pair by position
 lookupPair :: (Enum k, Ord k) => Int -> Order k a  -> Maybe (k, a)
-lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (lookup k o))
+lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (Data.Order.lookup k o))
 
 splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
 splitAt n = over _1 LL.fromListLike . over _2 LL.fromListLike . Vector.splitAt n . LL.fromListLike
@@ -103,7 +103,7 @@ deleteAt :: (Enum k, Ord k) => Int -> Order k a -> Order k a
 deleteAt n = uncurry (<>) . over _2 (LL.drop 1) . LL.splitAt n
 
 append :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
-append (k, a) m = insertAt (length m) (k, a) m
+append (k, a) m = Data.Order.insertAt (length m) (k, a) m
 
 prepend :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
 prepend (k, a) (Order m v) = Order (EnumMap.insert k a m) (LL.cons k v)
