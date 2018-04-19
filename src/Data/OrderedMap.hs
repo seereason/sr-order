@@ -41,7 +41,7 @@ import Data.Map as Map (Map, (!))
 import qualified Data.Map as Map
 import Data.SafeCopy (base)
 import Data.Serialize (Serialize)
-import Data.THUnify.SafeCopy (deriveSafeCopy)
+import Data.SafeCopy (deriveSafeCopy)
 import GHC.Generics (Generic)
 
 data OrderError
@@ -52,7 +52,7 @@ data OrderError
     | EmptyOrder -- ^ Expected an order with at least one element
     deriving (Data, Eq, Ord, Show, Generic, Serialize)
 
-$(deriveSafeCopy 1 'base [t|OrderError|])
+$(deriveSafeCopy 1 'base ''OrderError)
 
 -- | Minimum implementation: fromMapVecKey, toMap, toKeys, nextKey, newKey
 class (Ixed o, Ord (Index o), Enum (Index o), Default o) => OrderedMap o where

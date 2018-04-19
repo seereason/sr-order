@@ -51,7 +51,7 @@ import Data.EnumMap as EnumMap ((!), EnumMap, fromList, mapWithKey, maxViewWithK
 import qualified Data.EnumMap as EnumMap
 import Data.Monoid
 import Data.Order_0
-import Data.SafeCopy (base, contain, deriveSafeCopy, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
+import Data.SafeCopy (contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import Data.Sequence hiding (fromList, length, splitAt, sort, zip)
 import qualified Data.Sequence as Sequence
 import Data.Serialize (Serialize(get, put))

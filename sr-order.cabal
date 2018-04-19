@@ -30,7 +30,6 @@ library
     template-haskell,
     th-lift,
     th-lift-instances,
-    th-unify-clients,
     vector,
     web-routes,
     web-routes-th
