@@ -18,6 +18,7 @@ description:
 
 library
   hs-source-dirs: src
+  ghc-options: -Wall -O
   build-depends:
     base >= 4.8 && < 5,
     cereal,
@@ -43,7 +44,7 @@ library
 test-suite order-tests
   default-language: Haskell2010
   type: exitcode-stdio-1.0
-  ghc-options: -Wall
+  ghc-options: -Wall -O
   hs-source-dirs: tests
   main-is: Main.hs
   build-depends: base, containers, HUnit, ListLike, sr-order, QuickCheck
