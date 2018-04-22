@@ -54,8 +54,7 @@ import Data.Order_0
 import Data.SafeCopy (contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import Data.Sequence hiding (fromList, length, splitAt, sort, zip)
 import qualified Data.Sequence as Sequence
-import Data.Serialize (Serialize(get, put))
--- import Data.Traversable as Traversable
+import Data.Serialize (Serialize)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import qualified Data.Vector as Vector
 import GHC.Generics
@@ -72,7 +71,13 @@ data Order k v =
   Order
     { _map :: EnumMap k v
     , _vec :: L k
-    } deriving (Data, Typeable, Generic, Functor, Read)
+    } deriving (Data, Typeable, Functor, Read, Generic, Serialize)
+
+#if 0
+instance (Serialize k, Serialize v) => Serialize (Order k v) where
+    put o = put (_map o, _vec o)
+    get = do (m, v) <- get; return $ Order m v
+#endif
 
 instance (SafeCopy k, SafeCopy v, Ord k, Enum k) => Migrate (Order k v) where
   type MigrateFrom (Order k v) = Order_0 k v
@@ -218,10 +223,6 @@ instance (Enum k, Ord k) => Ixed (Order k a) where
         case EnumMap.lookup i m of
           Just a -> f a <&> \a' -> Order (EnumMap.insert i a' m) v
           Nothing -> pure o
-
-instance (Enum k, Ord k, Serialize k, Serialize v) => Serialize (Order k v) where
-    put o = put (_map o, _vec o)
-    get = do (m, v) <- get; return $ Order m v
 
 instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do

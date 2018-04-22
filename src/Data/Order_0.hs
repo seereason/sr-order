@@ -26,31 +26,22 @@ module Data.Order_0
     ) where
 
 import Control.Lens (At(..), FoldableWithIndex(ifoldMap), FunctorWithIndex(imap), Index, Ixed(..), IxValue, (<&>),
-                     TraversableWithIndex(..), Traversal', _Just, lens, Lens', makeLensesFor, view)
+                     TraversableWithIndex(..))
 import Data.Data (Data)
 import Data.Default (Default(def))
-import Data.List as List (elem, foldl, foldl', foldr, filter, partition)
+import Data.List as List (foldl, foldr)
 import qualified Data.ListLike as LL
 import Data.Map as Map ((!), Map)
 import qualified Data.Map as Map
 import Data.OrderedMap as OrderedMap
-import Data.Proxy (Proxy(Proxy))
-import Data.SafeCopy (SafeCopy(..), base, contain, deriveSafeCopy, safeGet, safePut)
-import Data.Serialize (Serialize(get, put))
-import Data.Set as Set (fromList)
-import Data.Tree (Tree(Node))
+import Data.SafeCopy (SafeCopy(..), base, contain, {-deriveSafeCopy,-} safeGet, safePut)
+import Data.Serialize (Serialize)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Instances.TH.Lift ()
-import Language.Haskell.TH
--- import Language.Haskell.TH.Path.Core (Describe(..), IsPath(..), makeCol, makeRow, makeTrees, PathStart(..), Peek(..), U(u, unU'))
--- import Language.Haskell.TH.Path.GHCJS (SafeCopy(..), base, contain, deriveSafeCopy, safeGet, safePut)
 import Language.Haskell.TH.Lift (deriveLiftMany)
---import Language.Haskell.TH.TypeGraph.Prelude ({-some Lift instances?-})
 import Prelude hiding (init)
-import Test.QuickCheck (Arbitrary(arbitrary), choose, forAll, Gen, infiniteListOf,
-                        listOf, Property, property, quickCheckAll, shuffle, sublistOf)
-import Web.Routes.TH (derivePathInfo)
+import Test.QuickCheck (Arbitrary(arbitrary), listOf)
 
 {-
 bang :: (Eq k, Ord k, Show k, Show v) => String -> Map k v -> k -> v
@@ -68,7 +59,7 @@ data Order_0 k v =
           , next :: k
           -- ^ Next available key
           }
-    deriving (Data, Typeable, Generic, Functor)
+    deriving (Data, Typeable, Functor, Generic, Serialize)
 
 instance (Ixed (Order_0 k v), Enum k, Ord k) => OrderedMap (Order_0 k v) where
     empty = Order_0 mempty mempty (toEnum 0)
@@ -90,9 +81,9 @@ instance Ord k => TraversableWithIndex k (Order_0 k) where
 -- Make sure that Foldable.toList gives us the key order,
 -- rather than the order returned by Map.toList.
 instance Ord k => Foldable (Order_0 k) where
-    foldMap f (Order_0 es ks n) = foldMap (\k -> f (es ! k)) ks
+    foldMap f (Order_0 es ks _n) = foldMap (\k -> f (es ! k)) ks
 instance Ord k => FoldableWithIndex k (Order_0 k) where
-    ifoldMap f (Order_0 es ks n) = foldMap (\k -> f k (es ! k)) ks
+    ifoldMap f (Order_0 es ks _n) = foldMap (\k -> f k (es ! k)) ks
 instance FunctorWithIndex k (Order_0 k) where
     imap f (Order_0 es ks n) = Order_0 (Map.mapWithKey f es) ks n
 
@@ -134,14 +125,10 @@ instance (Ord k, Enum k, Monoid (Order_0 k v)) => LL.FoldableLL (Order_0 k v) v 
     foldl f r0 xs = List.foldl f r0 (values xs)
     foldr f r0 xs = List.foldr f r0 (values xs)
 
-instance (Ord k, Enum k, Serialize k, Serialize e) => Serialize (Order_0 k e) where
-    put o = put (toMap o, toKeys o, nextKey o)
-    get = do (mp, ks, n) <- get; return $ fromMapVecKey mp ks n
-
 instance (Enum k, Ord k, Arbitrary v, Arbitrary k) => Arbitrary (Order_0 k v) where
     arbitrary = (fromPairs . LL.fromList) <$> listOf arbitrary
 
-$(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order_0)
+-- $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''Order_0)
 
 -- | Given the name of a type such as AbbrevPair, generate declarations
 -- @@
@@ -151,6 +138,7 @@ $(makeLensesFor [("elems", "elemsL"), ("order", "orderL"), ("next", "nextL")] ''
 --       toEnum = AbbrevPairID . toEnum
 --       fromEnum = fromEnum . unAbbrevPairID
 -- @@
+#if 0
 deriveOrder :: TypeQ -> Name -> [Name] -> Q [Dec]
 deriveOrder ityp t supers = do
   let idname = mkName (nameBase t ++ "ID")
@@ -171,6 +159,7 @@ deriveOrder ityp t supers = do
   -- for that.
   omtype <- tySynD mpname [] [t|Order_0 $(conT idname) $(conT t)|]
   return $ [idtype, omtype] ++ insts
+#endif
 
 #if 0
 $(deriveSafeCopy 0 'base ''Order_0)

@@ -2,16 +2,8 @@
 
 import Data.ListLike as LL hiding (length, fromList, putStrLn)
 import Data.Order
-import Test.HUnit (assertEqual, Counts(..), runTestTT, showCounts, Test(..))
+import Test.HUnit (Counts(..), runTestTT, showCounts, Test(..))
 import Test.QuickCheck
-
-{-
-prop_next_exceeds_all_keys :: Order Int String -> Bool
-prop_next_exceeds_all_keys o =
-    case keys o of
-      [] -> True
-      l -> maximum l < nextKey o
--}
 
 -- | Map and list should contain the same keys with no duplicates
 prop_toPairs_fromPairs :: Order Int String -> Bool
@@ -21,30 +13,24 @@ prop_toPairs_fromPairs o =
 prop_delete :: Order Int String -> Property
 prop_delete o | length o == 0 = property True
 prop_delete o =
-    forAll (choose (0, length o - 1)) $ \pos ->
-    length (Data.Order.deleteAt pos o) == length o - 1
+    forAll (choose (0, length o - 1)) $ \i ->
+    length (Data.Order.deleteAt i o) == length o - 1
 
 prop_insertAt :: (Int, String) -> Order Int String -> Property
-prop_insertAt v@(i, _) o =
-    forAll (choose (0, length o)) $ \pos ->
-    Data.Order.member i o || (length (insertAt pos v o) == length o + 1)
+prop_insertAt v@(k, _) o =
+    forAll (choose (0, length o)) $ \i ->
+    Data.Order.member k o || (length (insertAt i v o) == length o + 1)
 
 -- | Use an explicit generator to create a valid list position.
 prop_insert_delete :: (Int, String) -> Order Int String -> Property
-prop_insert_delete v@(i, _) o =
-    forAll (choose (0, length o)) $ \pos ->
-        Data.Order.member i o || (Data.Order.delete i (insertAt pos v o) == o)
+prop_insert_delete v@(k, _) o =
+    forAll (choose (0, length o)) $ \i ->
+        Data.Order.member k o || (Data.Order.delete k (insertAt i v o) == o)
 
 prop_insert_delete_pos :: (Int, String) -> Order Int String -> Property
-prop_insert_delete_pos v@(i, _) o =
-    forAll (choose (0, length o)) $ \pos ->
-        Data.Order.member i o || (Data.Order.deleteAt pos (Data.Order.insertAt pos v o) == o)
-
-{-
-prop_alter_test :: Order Int String -> Bool
-prop_alter_test o =
-    OrderedMap.alter (maybe (Just "new") (\_ -> Just "new")) 3 o == fromMapListKey (Map.fromList [(1,"1"),(2,"2"),(3,"new"),(4,"4")]) ([1,2,3,4]) (5)
--}
+prop_insert_delete_pos v@(k, _) o =
+    forAll (choose (0, length o)) $ \i ->
+        Data.Order.member k o || (Data.Order.deleteAt i (Data.Order.insertAt i v o) == o)
 
 return []
 tests :: IO Bool
