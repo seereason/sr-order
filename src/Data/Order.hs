@@ -54,10 +54,9 @@ import Data.Order_0
 import Data.SafeCopy (contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import Data.Sequence hiding (fromList, length, splitAt, sort, zip)
 import qualified Data.Sequence as Sequence
-import Data.Serialize (Serialize)
+import Data.Serialize (Serialize(..))
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import qualified Data.Vector as Vector
-import GHC.Generics
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Lift (deriveLiftMany)
 import Prelude hiding (foldMap, length, lookup, map, splitAt, zip)
@@ -71,13 +70,11 @@ data Order k v =
   Order
     { _map :: EnumMap k v
     , _vec :: L k
-    } deriving (Data, Typeable, Functor, Read, Generic, Serialize)
+    } deriving (Data, Typeable, Functor, Read)
 
-#if 0
-instance (Serialize k, Serialize v) => Serialize (Order k v) where
-    put o = put (_map o, _vec o)
-    get = do (m, v) <- get; return $ Order m v
-#endif
+instance (Ord k, Enum k, SafeCopy k, SafeCopy v, Serialize k, Serialize v) => Serialize (Order k v) where
+    put = safePut
+    get = safeGet
 
 instance (SafeCopy k, SafeCopy v, Ord k, Enum k) => Migrate (Order k v) where
   type MigrateFrom (Order k v) = Order_0 k v
