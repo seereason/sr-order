@@ -22,7 +22,6 @@
 
 module Data.Order
     ( Order(Order)
-    , Order_0(Order_0)
     -- * Lenses
     , map, vec
     -- * Operators
@@ -50,8 +49,7 @@ import qualified Data.Map.Strict as Map
 import Data.EnumMap as EnumMap ((!), EnumMap, fromList, mapWithKey, maxViewWithKey)
 import qualified Data.EnumMap as EnumMap
 import Data.Monoid
-import Data.Order_0
-import Data.SafeCopy (contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
+import Data.SafeCopy (base, contain, Migrate(..), SafeCopy(..), safeGet, safePut)
 import Data.Sequence hiding (fromList, length, splitAt, sort, zip)
 import qualified Data.Sequence as Sequence
 import Data.Serialize (Serialize(..))
@@ -75,10 +73,6 @@ data Order k v =
 instance (Ord k, Enum k, SafeCopy k, SafeCopy v, Serialize k, Serialize v) => Serialize (Order k v) where
     put = safePut
     get = safeGet
-
-instance (SafeCopy k, SafeCopy v, Ord k, Enum k) => Migrate (Order k v) where
-  type MigrateFrom (Order k v) = Order_0 k v
-  migrate (Order_0 mp ks _) = Order (EnumMap.fromList (Map.toList mp)) (fromListLike ks)
 
 instance (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
     show o = "fromListLike " ++ show (LL.fromListLike o :: [(k, v)]) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
@@ -261,7 +255,7 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
                      v <- safeGet
                      return $ Order m v
     version = 1
-    kind = extension
+    kind = base
     errorTypeName _ = "Order"
 #endif
 
