@@ -1,9 +1,15 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables #-}
+-- | A variation on IntMap that replaces the Int with any Enum instance.
+-- Note that the Enum values are not actually stored in the map, they
+-- are computed on demand using the Enum methods.  That is why, for
+-- example, fold is the same function as IntMap.fold.
+
+{-# LANGUAGE GADTs, CPP, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables #-}
 {-# OPTIONS -Wall -fno-warn-name-shadowing #-}
 
 module Data.EnumMap where
 
 import Control.Lens (_1, _Just, over)
+import qualified Data.Foldable as F
 import qualified Data.IntMap as IntMap
 import Data.IntMap (IntMap)
 import Data.IntSet (IntSet)
@@ -124,14 +130,16 @@ fromAscListWithKey f = IntMap.fromAscListWithKey (\k a1 a2 -> f (toEnum k) a1 a2
 fromDistinctAscList :: Enum k => [(k, a)] -> EnumMap k a
 fromDistinctAscList = IntMap.fromDistinctAscList . fmap (over _1 fromEnum)
 
-fromList :: Enum k => [(k, a)] -> EnumMap k a
-fromList = IntMap.fromList . fmap (over _1 fromEnum)
+fromList :: (Enum k, Foldable t) => t (k, a) -> EnumMap k a
+fromList xs = F.foldl' ins (empty :: EnumMap k a) xs
+  where ins t (k,x)  = insert k x t
 
-fromListWith :: Enum k => (a -> a -> a) -> [(k, a)] -> EnumMap k a
-fromListWith f = IntMap.fromListWith f . fmap (over _1 fromEnum)
+fromListWith :: (Foldable t, Enum k) => (a -> a -> a) -> t (k ,a) -> EnumMap k a
+fromListWith f xs = fromListWithKey (\_ x y -> f x y) xs
 
-fromListWithKey :: Enum k => (k -> a -> a -> a) -> [(k, a)] -> EnumMap k a
-fromListWithKey f = IntMap.fromListWithKey (\k a1 a2 -> f (toEnum k) a1 a2) . fmap (over _1 fromEnum)
+fromListWithKey :: (Foldable t, Enum k) => (k -> a -> a -> a) -> t (k, a) -> EnumMap k a
+fromListWithKey f xs = F.foldl' ins (empty :: EnumMap k a) xs
+  where ins m (k, a) = insertWithKey f k a m
 
 fromSet :: Enum k => (k -> a) -> IntSet -> EnumMap k a
 fromSet f s = IntMap.fromSet (f . toEnum) s
@@ -298,11 +306,11 @@ unionWith = IntMap.unionWith
 unionWithKey :: Enum k => (k -> a -> a -> a) -> EnumMap k a -> EnumMap k a -> EnumMap k a
 unionWithKey f m1 m2 = IntMap.unionWithKey (\k a1 a2 -> f (toEnum k) a1 a2) m1 m2
 
-unions :: [EnumMap k a] -> EnumMap k a
-unions = IntMap.unions
+unions :: Foldable t => t (EnumMap k a) -> EnumMap k a
+unions xs = F.foldl' union empty xs
 
-unionsWith :: (a -> a -> a) -> [EnumMap k a] -> EnumMap k a
-unionsWith = IntMap.unionsWith
+unionsWith :: Foldable t => (a -> a -> a) -> t (EnumMap k a) -> EnumMap k a
+unionsWith f xs = F.foldl' (unionWith f) empty xs
 
 update :: Enum k => (a -> Maybe a) -> k -> EnumMap k a -> EnumMap k a
 update f k m = IntMap.update f (fromEnum k) m

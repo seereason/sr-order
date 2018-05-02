@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP, FlexibleInstances, ScopedTypeVariables, TemplateHaskell, TupleSections, TypeFamilies #-}
 
-import Data.Foldable
 import Data.Order
 import Data.Sequence as L hiding (length)
 import Test.HUnit (Counts(..), runTestTT, showCounts, Test(..))

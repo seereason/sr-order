@@ -53,7 +53,7 @@ import Data.List as List (nub)
 import Data.Monoid
 import Data.SafeCopy (base, contain, SafeCopy(..), safeGet, safePut)
 import Data.Sequence hiding (fromList, length, splitAt, sort, zip)
-import qualified Data.Sequence as Sequence
+import qualified Data.Sequence as Seq
 import qualified Data.Sequence as L
 import Data.Serialize (Serialize(..))
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
@@ -97,7 +97,7 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
 #endif
 
 instance (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
-    show o = "fromListLike " ++ show (toPairs o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
+    show o = "fromPairs" ++ show (toPairs o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
 
 instance (Enum k, Ord k) => Monoid (Order k v) where
     mempty = Order mempty mempty
@@ -133,8 +133,8 @@ instance (Enum k, Ord k) => FoldableWithIndex k (Order k) where
 instance Enum k => FunctorWithIndex k (Order k) where
     imap f (Order m v) = Order (EnumMap.mapWithKey f m) v
 
-fromPairs :: (Ord k, Enum k) => L (k, a) -> Order k a
-fromPairs pairs = Order (EnumMap.fromList (toList pairs)) (fmap fst pairs)
+fromPairs :: (Ord k, Enum k, Foldable t, Functor t) => t (k, a) -> Order k a
+fromPairs pairs = Order (EnumMap.fromList pairs) (Seq.fromList (toList (fmap fst pairs)))
 
 toPairs :: (Ord k, Enum k) => Order k a -> L (k, a)
 toPairs (Order m v) = fmap (\k -> (k, m ! k)) v
@@ -143,7 +143,7 @@ toPairs (Order m v) = fmap (\k -> (k, m ! k)) v
 -- containers in version 0.5.8.
 lookupKey :: Enum k => Int -> Order k a -> Maybe k
 lookupKey i o | i < 0 || i >= length (keys o) = Nothing
-lookupKey i o = Just (Sequence.index (keys o) i)
+lookupKey i o = Just (Seq.index (keys o) i)
 
 -- | Like Map.lookup.
 lookup :: (Enum k, Ord k) => k -> Order k a -> Maybe a
@@ -210,7 +210,7 @@ ilookup k (Order m v) =
 view :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a, Order k a)
 view k o@(Order m v) =
   case ilookup k o of
-    Just (i, a) -> Just (i, a, Order (EnumMap.delete k m) (Sequence.filter (/= k) v))
+    Just (i, a) -> Just (i, a, Order (EnumMap.delete k m) (Seq.filter (/= k) v))
     Nothing -> Nothing
 
 member :: (Enum k, Ord k) => k -> Order k v -> Bool
