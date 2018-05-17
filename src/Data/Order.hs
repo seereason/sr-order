@@ -157,7 +157,10 @@ splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
 splitAt n = over _1 fromPairs . over _2 fromPairs . L.splitAt n . toPairs
 
 insertAt :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
-insertAt n (k, a) = uncurry (<>) . over _2 (prepend (k, a)) . splitAt n
+insertAt n (k, a) o | n < 0 = insertAt 0 (k, a) o
+insertAt n (k, a) o | n > length o = insertAt (length o) (k, a) o
+insertAt n (k, a) o =
+    uncurry (<>) . over _2 (prepend (k, a)) . splitAt n $ o
 
 drop :: Enum k => Int -> Order k a -> Order k a
 drop n (Order m v) =
