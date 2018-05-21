@@ -16,18 +16,6 @@ import Data.IntSet (IntSet)
 
 type EnumMap k a = IntMap a
 
-fold :: (a -> b -> b) -> b -> EnumMap k a -> b
-fold = IntMap.fold
-
-foldWithKey :: forall k a b. Enum k => (k -> a -> b -> b) -> b -> EnumMap k a -> b
-foldWithKey f b0 m = IntMap.foldWithKey (\k a b -> f (toEnum k :: k) a b) b0 m
-
-insertWith' :: Enum k => (a -> a -> a) -> k -> a -> EnumMap k a -> EnumMap k a
-insertWith' f k a m = IntMap.insertWith' f (fromEnum k) a m
-
-insertWithKey' :: Enum k => (k -> a -> a -> a) -> k -> a -> EnumMap k a -> EnumMap k a
-insertWithKey' f k a m = IntMap.insertWithKey' (\k a1 a2 -> f (toEnum k) a1 a2) (fromEnum k) a m
-
 (!) :: Enum k => EnumMap k a -> k -> a
 (!) m k = (IntMap.!) m (fromEnum k)
 
@@ -263,12 +251,6 @@ partition = IntMap.partition
 
 partitionWithKey :: Enum k => (k -> a -> Bool) -> EnumMap k a -> (EnumMap k a, EnumMap k a)
 partitionWithKey f m = IntMap.partitionWithKey (\k a -> f (toEnum k) a) m
-
-showTree :: Show a => EnumMap k a -> String
-showTree = IntMap.showTree
-
-showTreeWith :: Show a => Bool -> Bool -> EnumMap k a -> String
-showTreeWith = IntMap.showTreeWith
 
 singleton :: Enum k => k -> a -> EnumMap k a
 singleton k a = IntMap.singleton (fromEnum k) a
