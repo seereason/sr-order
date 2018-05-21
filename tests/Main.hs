@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP, FlexibleInstances, ScopedTypeVariables, TemplateHaskell, TupleSections, TypeFamilies #-}
 
 import Data.Order
-import Data.Sequence as L hiding (length)
+import Data.Sequence as L (Seq)
 import Test.HUnit (Counts(..), runTestTT, showCounts, Test(..))
 import Test.QuickCheck
 
