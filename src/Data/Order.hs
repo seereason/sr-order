@@ -29,16 +29,22 @@ module Data.Order
     -- * Operators
     , keys, values, pos, Data.Order.lookup, ilookup, view
     , Data.Order.next, mapKeys
-    , member, permuteUnsafe, permute
+    , Data.Order.member, permuteUnsafe, permute
     -- * Positional operations
     , lookupKey, lookupPair
     , Data.Order.insertAt
     , Data.Order.deleteAt
-    , splitAt
+    , splitAt, Data.Order.drop, Data.Order.take
     , append, prepend
     -- * Allocate new keys
     -- * QuickCheck property
-    , prop_same_keys
+    , prop_next
+    , prop_keys
+    , prop_fromPairs
+    , prop_lookup
+    , prop_lookupKey
+    , prop_lookupPair
+    , prop_splitAt
     ) where
 
 import Control.Lens hiding (view)
@@ -47,30 +53,28 @@ import qualified Data.Foldable as Foldable
 import Data.Foldable as Foldable
 --import qualified Data.ListLike as LL
 --import Data.ListLike as LL (filter, ListLike, FoldableLL, fromListLike, nub, sort, zip)
-import Data.EnumMap as EnumMap ((!), EnumMap, mapWithKey, maxViewWithKey)
+import Data.EnumMap as EnumMap ((!), EnumMap, keysSet, mapWithKey, member)
 import qualified Data.EnumMap as EnumMap
 import Data.List as List (nub)
+import Data.Maybe (isNothing)
 import Data.Monoid
 import Data.SafeCopy (base, contain, SafeCopy(..), safeGet, safePut)
-import Data.Sequence hiding (fromList, length, splitAt, sort, zip)
+import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
-import qualified Data.Sequence as L
 import Data.Serialize (Serialize(..))
+import qualified Data.Set as Set
+--import Data.IntSet as Set (maxView)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 -- import qualified Data.Vector as Vector
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Lift (deriveLiftMany)
 import Prelude hiding (foldMap, length, lookup, map, splitAt, zip)
-import Test.QuickCheck (Arbitrary(arbitrary), shuffle, sized, vector, vectorOf)
-
--- type L a = [a]
-type L a = Seq a
--- type L a = Vector a
+import Test.QuickCheck (Arbitrary(arbitrary), choose, Gen, quickCheck, shuffle, sized, vector, vectorOf)
 
 data Order k v =
   Order
     { _map :: EnumMap k v
-    , _vec :: L k
+    , _vec :: Seq k
     } deriving (Data, Typeable, Functor, Read)
 
 $(makeLenses ''Order)
@@ -136,8 +140,11 @@ instance Enum k => FunctorWithIndex k (Order k) where
 fromPairs :: (Ord k, Enum k, Foldable t, Functor t) => t (k, a) -> Order k a
 fromPairs pairs = Order (EnumMap.fromList pairs) (Seq.fromList (toList (fmap fst pairs)))
 
-toPairs :: (Ord k, Enum k) => Order k a -> L (k, a)
+toPairs :: (Ord k, Enum k) => Order k a -> Seq (k, a)
 toPairs (Order m v) = fmap (\k -> (k, m ! k)) v
+
+prop_fromPairs :: Order Char String -> Bool
+prop_fromPairs o = fromPairs (toPairs o) == o
 
 -- | Lookup key by position.  A lookup function appears in
 -- containers in version 0.5.8.
@@ -145,24 +152,68 @@ lookupKey :: Enum k => Int -> Order k a -> Maybe k
 lookupKey i o | i < 0 || i >= length (keys o) = Nothing
 lookupKey i o = Just (Seq.index (keys o) i)
 
+data InsertPosition k v = InsertPosition (Order k v) Int deriving Show
+
+instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
+  arbitrary = do
+      o <- arbitrary :: Gen (Order k v)
+      InsertPosition o <$> choose (0, length o)
+
+data ElementPosition k v = ElementPosition (Order k v) (Maybe Int) deriving Show
+
+instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition k v) where
+  arbitrary = do
+      o <- arbitrary :: Gen (Order k v)
+      case length o of
+        0 -> return $ ElementPosition o Nothing
+        n -> ElementPosition o <$> (Just <$> choose (0, pred n))
+
+prop_lookupKey :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
+prop_lookupKey (InsertPosition o i) a =
+    lookupKey i o' == Just k && lookupKey (length o) o == Nothing
+    where o' = insertAt i (k, a) o
+          k = next o
+
 -- | Like Map.lookup.
 lookup :: (Enum k, Ord k) => k -> Order k a -> Maybe a
 lookup k (Order m _) = EnumMap.lookup k m
+
+prop_lookup :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
+prop_lookup (InsertPosition o i) a =
+    lookup k o' == Just a && lookup k o == Nothing
+    where o' = insertAt i (k, a) o
+          k = next o
 
 -- | Lookup pair by position
 lookupPair :: (Enum k, Ord k) => Int -> Order k a  -> Maybe (k, a)
 lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (Data.Order.lookup k o))
 
+prop_lookupPair :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
+prop_lookupPair (InsertPosition o i) a =
+    lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
+    where o' = insertAt i (k, a) o
+          k = next o
+
 splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
-splitAt n = over _1 fromPairs . over _2 fromPairs . L.splitAt n . toPairs
+splitAt n = over _1 fromPairs . over _2 fromPairs . Seq.splitAt n . toPairs
+
+prop_splitAt :: (k ~ Char, a ~ String) => ElementPosition k a -> Bool
+prop_splitAt (ElementPosition o i) =
+    let (a, b) = splitAt (maybe 0 id i) o in
+    o == a <> b
 
 insertAt :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
 insertAt n (k, a) o = uncurry (<>) . over _2 (prepend (k, a)) . splitAt n $ o
 
 drop :: Enum k => Int -> Order k a -> Order k a
 drop n (Order m v) =
-  let (a, b) = L.splitAt n v in
+  let (a, b) = Seq.splitAt n v in
   Order (Foldable.foldr EnumMap.delete m a) b
+
+take :: Enum k => Int -> Order k a -> Order k a
+take n (Order m v) =
+  let (a, b) = Seq.splitAt n v in
+  Order (Foldable.foldr EnumMap.delete m b) a
 
 deleteAt :: (Enum k, Ord k) => Int -> Order k a -> Order k a
 deleteAt n = uncurry (<>) . over _2 (Data.Order.drop 1) . splitAt n
@@ -171,29 +222,39 @@ append :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
 append (k, a) m = Data.Order.insertAt (length m) (k, a) m
 
 prepend :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
-prepend (k, a) (Order m v) = Order (EnumMap.insert k a m) (L.singleton k <> v)
+prepend (k, a) (Order m v) = Order (EnumMap.insert k a m) (Seq.singleton k <> v)
 
 -- | Return the keys in order.
-keys :: Order k a -> L k
+keys :: Order k a -> Seq k
 keys = _vec
 
+prop_keys :: Order Char String -> Bool
+prop_keys (Order m v) = EnumMap.keysSet m == Set.fromList (Foldable.toList v)
+
 -- | Return the next available key
+-- @@
+-- λ> next (fromPairs (Vector.fromList [(2, "a"), (5, "b")]))
+-- 6
+-- λ> next (fromPairs (Data.Vector.fromList []) :: Order Int String)
+-- 0
+-- @@
 next :: Enum k => Order k a -> k
-next o = maybe (toEnum 0) (succ . fst . fst) (maxViewWithKey (_map o))
+next (Order m _) = head (dropWhile (`EnumMap.member` m) [toEnum 0 ..])
+-- next (Order m _) = maybe (toEnum 0) (succ . toEnum . fst) (Set.maxView (EnumMap.keysSet m))
+
+prop_next :: Order Char String -> Bool
+prop_next o = isNothing (Seq.elemIndexL (next o) (keys o))
 
 -- | Return the position of a key, Nothing if absent.
 pos :: Eq k => k -> Order k a -> Maybe Int
 pos k (Order _ v) =
-    case L.breakl (== k) v of
-      (_, x) | L.null x -> Nothing
-      (x, _) -> Just (L.length x)
+    case Seq.breakl (== k) v of
+      (_, x) | Seq.null x -> Nothing
+      (x, _) -> Just (Seq.length x)
 
 -- | Return the values in order.
-values :: (Enum k, Ord k) => Order k a -> L a
+values :: (Enum k, Ord k) => Order k a -> Seq a
 values x = fmap (\k -> _map x ! k) (keys x)
-
-prop_same_keys :: Order Int String -> Bool
-prop_same_keys o = L.sort (_vec o) == L.sort (L.fromList (nub (toList (EnumMap.keys (_map o) :: [Int]))))
 
 -- | Based on Data.Map.mapKeys
 mapKeys :: (Enum k1, Enum k2, Ord k2) => (k1 -> k2) -> Order k1 a -> Order k2 a
@@ -203,7 +264,7 @@ ilookup :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a)
 ilookup k (Order m v) =
     case EnumMap.lookup k m of
       Nothing -> Nothing
-      Just a -> Just (L.length (fst (L.breakl (== k) v)), a)
+      Just a -> Just (Seq.length (fst (Seq.breakl (== k) v)), a)
 
 -- | Like 'Data.Set.minView', if k is present returns the position,
 -- associated value, and the order with that value removed.
@@ -242,9 +303,9 @@ instance (Enum k, Ord k) => Ixed (Order k a) where
 instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
-      let ks' = L.fromList (nub ks)
+      let ks' = Seq.fromList (nub ks)
       vs <- vector (length ks')
-      return (fromPairs (L.zip ks' (L.fromList vs)))
+      return (fromPairs (Seq.zip ks' (Seq.fromList vs)))
 
 #if 0
 instance (Enum k, Ord k, Monoid (Order k v)) => LL.ListLike (Order k v) (k, v) where
@@ -272,27 +333,26 @@ $(deriveLiftMany [''Order])
 
 -- | Replace the current ordering with the given key list.  Duplicate
 -- keys are ignored, missing keys are appended.
-permuteUnsafe :: forall k v. (Enum k, Ord k) => L k -> Order k v -> Order k v
+permuteUnsafe :: forall k v. (Enum k, Ord k) => Seq k -> Order k v -> Order k v
 permuteUnsafe neworder (Order m _v) =
     Order m (present <> missing)
     where
       -- Remove unknown keys
-      present :: L k
-      present = L.fromList (List.nub (toList (L.filter (`EnumMap.member` m) neworder)))
+      present :: Seq k
+      present = Seq.fromList (List.nub (toList (Seq.filter (`EnumMap.member` m) neworder)))
       -- Collect the values that are missing from the new key order
-      missing :: L k
-      missing = L.fromList (EnumMap.keys (foldr EnumMap.delete m present))
+      missing :: Seq k
+      missing = Seq.fromList (EnumMap.keys (foldr EnumMap.delete m present))
 
 -- deriving instance Serialize v => Serialize (EnumMap k v)
 -- $(deriveLiftMany [''EnumMap])
 -- $(deriveSafeCopy 1 'base ''EnumMap)
 
--- | A permute function that insists that verifies that neworder is a
--- valid permutation.
-permute :: forall k v. (Enum k, Ord k) => L k -> Order k v -> Either String (Order k v)
+-- | A permute function that verifies neworder is a valid permutation.
+permute :: forall k v. (Enum k, Ord k) => Seq k -> Order k v -> Either String (Order k v)
 permute neworder (Order m v) =
-    case L.partition (`EnumMap.member` m) neworder of
-      (_, b) | L.length b /= 0 -> Left "invalid keys"
-      (a, _) | L.length a < L.length v -> Left "missing keys"
+    case Seq.partition (`EnumMap.member` m) neworder of
+      (_, b) | Seq.length b /= 0 -> Left "invalid keys"
+      (a, _) | Seq.length a < Seq.length v -> Left "missing keys"
       (a, _) | List.nub (toList a) /= toList a -> Left "duplicate keys"
       _ -> Right (Order m neworder)

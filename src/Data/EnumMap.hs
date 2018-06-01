@@ -13,6 +13,9 @@ import qualified Data.Foldable as F
 import qualified Data.IntMap as IntMap
 import Data.IntMap (IntMap)
 import Data.IntSet (IntSet)
+import qualified Data.IntSet as IntSet
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 type EnumMap k a = IntMap a
 
@@ -168,8 +171,8 @@ isSubmapOfBy = IntMap.isSubmapOfBy
 keys :: Enum k => EnumMap k a -> [k]
 keys = fmap toEnum . IntMap.keys
 
-keysSet :: EnumMap k a -> IntSet
-keysSet = IntMap.keysSet
+keysSet :: (Ord k, Enum k) => EnumMap k a -> Set k
+keysSet = IntSet.foldr (Set.insert . toEnum) Set.empty . IntMap.keysSet
 
 lookup :: Enum k => k -> EnumMap k a -> Maybe a
 lookup k m = IntMap.lookup (fromEnum k) m
