@@ -38,6 +38,7 @@ module Data.Order
     , append, prepend
     -- * Allocate new keys
     -- * QuickCheck property
+    , tests
     , prop_next
     , prop_keys
     , prop_fromPairs
@@ -69,7 +70,7 @@ import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Lift (deriveLiftMany)
 import Prelude hiding (foldMap, length, lookup, map, splitAt, zip)
-import Test.QuickCheck (Arbitrary(arbitrary), choose, Gen, quickCheck, shuffle, sized, vector, vectorOf)
+import Test.QuickCheck (Arbitrary(arbitrary), choose, Gen, quickCheckResult, Result, shuffle, sized, vector, vectorOf)
 
 data Order k v =
   Order
@@ -356,3 +357,13 @@ permute neworder (Order m v) =
       (a, _) | Seq.length a < Seq.length v -> Left "missing keys"
       (a, _) | List.nub (toList a) /= toList a -> Left "duplicate keys"
       _ -> Right (Order m neworder)
+
+tests :: IO Result
+tests = do
+  msum [ quickCheckResult prop_next
+       , quickCheckResult prop_keys
+       , quickCheckResult prop_fromPairs
+       , quickCheckResult prop_lookup
+       , quickCheckResult prop_lookupKey
+       , quickCheckResult prop_lookupPair
+       , quickCheckResult prop_splitAt ]

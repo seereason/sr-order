@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, FlexibleInstances, ScopedTypeVariables, TemplateHaskell, TupleSections, TypeFamilies #-}
 
-import Data.Order
+import Data.Order as Order
 import Data.Sequence as L (Seq)
 import Test.HUnit (Counts(..), runTestTT, showCounts, Test(..))
 import Test.QuickCheck
@@ -14,23 +14,23 @@ prop_delete :: Order Int String -> Property
 prop_delete o | length o == 0 = property True
 prop_delete o =
     forAll (choose (0, length o - 1)) $ \i ->
-    length (Data.Order.deleteAt i o) == length o - 1
+    length (Order.deleteAt i o) == length o - 1
 
 prop_insertAt :: (Int, String) -> Order Int String -> Property
 prop_insertAt v@(k, _) o =
     forAll (choose (0, length o)) $ \i ->
-    Data.Order.member k o || (length (insertAt i v o) == length o + 1)
+    Order.member k o || (length (insertAt i v o) == length o + 1)
 
 -- | Use an explicit generator to create a valid list position.
 prop_insert_delete :: (Int, String) -> Order Int String -> Property
 prop_insert_delete (k, a) o =
     forAll (choose (0, length o)) $ \i ->
-        Data.Order.member k o || (Data.Order.view k (insertAt i (k, a) o) == Just (i, a, o))
+        Order.member k o || (Order.view k (insertAt i (k, a) o) == Just (i, a, o))
 
 prop_insert_delete_pos :: (Int, String) -> Order Int String -> Property
 prop_insert_delete_pos v@(k, _) o =
     forAll (choose (0, length o)) $ \i ->
-        Data.Order.member k o || (Data.Order.deleteAt i (Data.Order.insertAt i v o) == o)
+        Order.member k o || (Order.deleteAt i (Order.insertAt i v o) == o)
 
 return []
 tests :: IO Bool
@@ -38,7 +38,8 @@ tests = $quickCheckAll
 
 main :: IO ()
 main = do
-  tests
+  Order.tests
+  Main.tests
   counts <- runTestTT $ TestList $
     []
   case counts of
