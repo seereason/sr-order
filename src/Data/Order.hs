@@ -51,7 +51,7 @@ module Data.Order
 import Control.Lens hiding (view)
 import Data.Data (Data)
 import qualified Data.Foldable as Foldable
-import Data.Foldable as Foldable
+import Data.Foldable as Foldable hiding (toList)
 --import qualified Data.ListLike as LL
 --import Data.ListLike as LL (filter, ListLike, FoldableLL, fromListLike, nub, sort, zip)
 import Data.EnumMap as EnumMap ((!), EnumMap, keysSet, mapWithKey, member)
@@ -66,6 +66,7 @@ import Data.Serialize (Serialize(..))
 import qualified Data.Set as Set
 --import Data.IntSet as Set (maxView)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
+import GHC.Exts
 -- import qualified Data.Vector as Vector
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Lift (deriveLiftMany)
@@ -79,6 +80,11 @@ data Order k v =
     } deriving (Data, Typeable, Functor, Read)
 
 $(makeLenses ''Order)
+
+instance (Ord k, Enum k) => IsList (Order k v) where
+  type Item (Order k v) = (k, v)
+  fromList = fromPairs
+  toList = toList . toPairs
 
 instance (Ord k, Enum k, SafeCopy k, SafeCopy v, Serialize k, Serialize v) => Serialize (Order k v) where
     put = safePut
@@ -138,8 +144,13 @@ instance (Enum k, Ord k) => FoldableWithIndex k (Order k) where
 instance Enum k => FunctorWithIndex k (Order k) where
     imap f (Order m v) = Order (EnumMap.mapWithKey f m) v
 
-fromPairs :: (Ord k, Enum k, Foldable t, Functor t) => t (k, a) -> Order k a
-fromPairs pairs = Order (EnumMap.fromList pairs) (Seq.fromList (toList (fmap fst pairs)))
+fromPairs :: forall t k a. (Ord k, Enum k, Foldable t, Functor t) => t (k, a) -> Order k a
+fromPairs pairs =
+    Order (fromList (fmap (over _1 fromEnum) pairs'))
+          (fromList (fmap fst pairs'))
+    where
+      pairs' :: [(k, a)]
+      pairs' = Foldable.toList pairs
 
 toPairs :: (Ord k, Enum k) => Order k a -> Seq (k, a)
 toPairs (Order m v) = fmap (\k -> (k, m ! k)) v
