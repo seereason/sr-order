@@ -65,6 +65,7 @@ import qualified Data.Sequence as Seq
 import Data.Serialize (Serialize(..))
 import qualified Data.Set as Set
 --import Data.IntSet as Set (maxView)
+import qualified Data.Semigroup as Sem
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import GHC.Exts
 -- import qualified Data.Vector as Vector
@@ -110,9 +111,8 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
 instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
     show o = "fromList " ++ show (toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
 
-instance (Enum k, Ord k) => Monoid (Order k v) where
-    mempty = Order mempty mempty
-    mappend a b = Order (mappend (_map a) (_map b)) (_vec a <> _vec b)
+instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
+    (<>) a b = Order (mappend (_map a) (_map b)) (_vec a <> _vec b)
     -- ^ If there are any common @k@ values in the shared
     -- map the elements from the second is omitted.  For
     -- this reason it is suggested that, when in doubt,
@@ -120,6 +120,12 @@ instance (Enum k, Ord k) => Monoid (Order k v) where
     -- @@
     --   mapKeys Left a <> mapKeys Right b
     -- @@
+
+instance (Enum k, Ord k) => Monoid (Order k v) where
+    mempty = Order mempty mempty
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
+#endif
 
 -- Fold over the values only
 -- @@
