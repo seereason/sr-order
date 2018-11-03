@@ -19,18 +19,18 @@ prop_delete o =
 prop_insertAt :: (Int, String) -> Order Int String -> Property
 prop_insertAt v@(k, _) o =
     forAll (choose (0, length o)) $ \i ->
-    Order.member k o || (length (insertAt i v o) == length o + 1)
+    Order.member k o || (length (insertAtUnsafe i v o) == length o + 1)
 
 -- | Use an explicit generator to create a valid list position.
 prop_insert_delete :: (Int, String) -> Order Int String -> Property
 prop_insert_delete (k, a) o =
     forAll (choose (0, length o)) $ \i ->
-        Order.member k o || (Order.view k (insertAt i (k, a) o) == Just (i, a, o))
+        Order.member k o || (Order.view k (insertAtUnsafe i (k, a) o) == Just (i, a, o))
 
 prop_insert_delete_pos :: (Int, String) -> Order Int String -> Property
 prop_insert_delete_pos v@(k, _) o =
     forAll (choose (0, length o)) $ \i ->
-        Order.member k o || (Order.deleteAt i (Order.insertAt i v o) == o)
+        Order.member k o || (Order.deleteAt i (Order.insertAtUnsafe i v o) == o)
 
 return []
 tests :: IO Bool

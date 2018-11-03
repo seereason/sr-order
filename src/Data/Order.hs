@@ -22,20 +22,21 @@
 
 module Data.Order
     ( Order(Order)
+    , toPairList
     -- * Lenses
     , map, vec
     -- * Builder
-    , fromPairs, toPairs
+    , fromPairs
     -- * Operators
     , keys, values, pos, Data.Order.lookup, ilookup, view
     , Data.Order.next, mapKeys
-    , Data.Order.member, permuteUnsafe, permute
+    , Data.Order.member, permute, permuteUnsafe
     -- * Positional operations
     , lookupKey, lookupPair
-    , Data.Order.insertAt
+    , Data.Order.insertAt, insertAtUnsafe
     , Data.Order.deleteAt
     , splitAt, Data.Order.drop, Data.Order.take
-    , append, prepend
+    , append, prepend, appendUnsafe, prependUnsafe
     -- * Allocate new keys
     -- * QuickCheck property
     , tests
@@ -46,6 +47,11 @@ module Data.Order
     , prop_lookupKey
     , prop_lookupPair
     , prop_splitAt
+    -- * Is/Has classes and instances
+    , IsMap(..)
+    , HasMap(..)
+    , IsOrder(..)
+    , HasOrder(..)
     ) where
 
 import Control.Lens hiding (view)
@@ -57,6 +63,8 @@ import Data.Foldable as Foldable hiding (toList)
 import Data.EnumMap as EnumMap ((!), EnumMap, keysSet, mapWithKey, member)
 import qualified Data.EnumMap as EnumMap
 import Data.List as List (nub)
+import Data.Map (Map)
+import qualified Data.Map as Map (fromList{-, toList-})
 import Data.Maybe (isNothing)
 import Data.Monoid
 import Data.SafeCopy (base, contain, SafeCopy(..), safeGet, safePut)
@@ -85,7 +93,7 @@ $(makeLenses ''Order)
 instance (Ord k, Enum k) => IsList (Order k v) where
   type Item (Order k v) = (k, v)
   fromList = fromPairs
-  toList = toList . toPairs
+  toList = GHC.Exts.toList . toPairs
 
 instance (Ord k, Enum k, SafeCopy k, SafeCopy v, Serialize k, Serialize v) => Serialize (Order k v) where
     put = safePut
@@ -150,6 +158,55 @@ instance (Enum k, Ord k) => FoldableWithIndex k (Order k) where
 instance Enum k => FunctorWithIndex k (Order k) where
     imap f (Order m v) = Order (EnumMap.mapWithKey f m) v
 
+-- | Can be fully constructed from a Map
+class (Ixed o, Eq (Index o)) => IsMap o where
+    fromMap :: Map (Index o) (IxValue o) -> o
+
+-- | Contains at least as much information as a Map
+class HasMap o where
+    toMap :: o -> Map (Index o) (IxValue o)
+
+-- | Can be fully constructed from an Order
+class IsOrder o where
+    fromOrder :: Order (Index o) (IxValue o) -> o
+
+-- | Contains at least as much information as an Order
+class (Ord (Index o), Enum (Index o)) => HasOrder o where
+    toOrder :: o -> Order (Index o) (IxValue o)
+    toPairs :: o -> Seq (Index o, IxValue o)
+    toPairs = toPairs' . toOrder
+
+toPairList :: (Ord k, Enum k) => Order k v -> [(k, v)]
+toPairList = toList . toPairs
+
+-- pos :: HasOrder o => o -> Index o -> Maybe Int
+-- pos = Order.pos . toOrder
+
+-- Order k v instances
+instance (Ord k, Enum k) => IsOrder  (Order k v) where fromOrder = id
+instance (Ord k, Enum k) => HasOrder (Order k v) where toOrder = id
+instance (Ord k, Enum k) => HasMap   (Order k v) where toMap = Map.fromList . GHC.Exts.toList . toPairs
+
+-- Map k v instances
+instance Ord k =>           IsMap   (Map k v) where fromMap = id
+instance (Ord k, Enum k) => IsOrder (Map k v) where fromOrder = Map.fromList . GHC.Exts.toList . toPairs
+instance                    HasMap  (Map k v) where toMap = id
+
+-- We can't write instances for [(k, v)] due to existing Ixed [a]
+-- instance.  We could create a wrapper, there's some work to convert
+-- integer index to key.
+#if 0
+newtype AList k v = AList {unAList :: [(k, v)]}
+instance At (AList k v) where at k = lens unAList AList . (maybe _Nothing at (findIndex undefined :: Lens' [(k, v)] (Maybe v))  {-lens AList unAList . (at k :: Lens [(k, v)] (Maybe (k, v)))-}
+instance Ixed (AList k v) where ix k = lens AList unAList . ix k
+type instance Index (AList k v) = k
+type instance IxValue (AList k v) = v
+instance (Ord k, Enum k) => IsMap (AList k v) where fromMap = AList . Map.toList
+instance (Ord k, Enum k) => HasMap (AList k v) where toMap = Map.fromList . unAList
+instance (Ord k, Enum k) => IsOrder (AList k v) where fromOrder = AList . GHC.Exts.toList . toPairs
+instance (Ord k, Enum k) => HasOrder (AList k v) where toOrder = fromPairs . unAList
+#endif
+
 fromPairs :: forall t k a. (Ord k, Enum k, Foldable t, Functor t) => t (k, a) -> Order k a
 fromPairs pairs =
     Order (fromList (fmap (over _1 fromEnum) pairs'))
@@ -158,8 +215,8 @@ fromPairs pairs =
       pairs' :: [(k, a)]
       pairs' = Foldable.toList pairs
 
-toPairs :: (Ord k, Enum k) => Order k a -> Seq (k, a)
-toPairs (Order m v) = fmap (\k -> (k, m ! k)) v
+toPairs' :: (Ord k, Enum k) => Order k a -> Seq (k, a)
+toPairs' (Order m v) = fmap (\k -> (k, m ! k)) v
 
 prop_fromPairs :: Order Char String -> Bool
 prop_fromPairs o = fromPairs (toPairs o) == o
@@ -189,7 +246,7 @@ instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition
 prop_lookupKey :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupKey (InsertPosition o i) a =
     lookupKey i o' == Just k && lookupKey (length o) o == Nothing
-    where o' = insertAt i (k, a) o
+    where o' = insertAtUnsafe i (k, a) o
           k = next o
 
 -- | Like Map.lookup.
@@ -199,7 +256,7 @@ lookup k (Order m _) = EnumMap.lookup k m
 prop_lookup :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookup (InsertPosition o i) a =
     lookup k o' == Just a && lookup k o == Nothing
-    where o' = insertAt i (k, a) o
+    where o' = insertAtUnsafe i (k, a) o
           k = next o
 
 -- | Lookup pair by position
@@ -209,7 +266,7 @@ lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (Data.Order.lookup k o))
 prop_lookupPair :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupPair (InsertPosition o i) a =
     lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
-    where o' = insertAt i (k, a) o
+    where o' = insertAtUnsafe i (k, a) o
           k = next o
 
 splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
@@ -220,8 +277,12 @@ prop_splitAt (ElementPosition o i) =
     let (a, b) = splitAt (maybe 0 id i) o in
     o == a <> b
 
-insertAt :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
-insertAt n (k, a) o = uncurry (<>) . over _2 (prepend (k, a)) . splitAt n $ o
+-- Does not check whether k is present
+insertAtUnsafe :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
+insertAtUnsafe n (k, a) o = uncurry (<>) . over _2 (prependUnsafe (k, a)) . splitAt n $ o
+
+insertAt :: (Enum k, Ord k) => Int -> a -> Order k a -> (Order k a, k)
+insertAt n a o = let k = next o in (insertAtUnsafe n (k, a) o, k)
 
 drop :: Enum k => Int -> Order k a -> Order k a
 drop n (Order m v) =
@@ -236,11 +297,19 @@ take n (Order m v) =
 deleteAt :: (Enum k, Ord k) => Int -> Order k a -> Order k a
 deleteAt n = uncurry (<>) . over _2 (Data.Order.drop 1) . splitAt n
 
-append :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
-append (k, a) m = Data.Order.insertAt (length m) (k, a) m
+-- Does not check whether k is present
+appendUnsafe :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
+appendUnsafe (k, a) m = Data.Order.insertAtUnsafe (length m) (k, a) m
 
-prepend :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
-prepend (k, a) (Order m v) = Order (EnumMap.insert k a m) (Seq.singleton k <> v)
+append :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
+append a m = let k = next m in (Data.Order.appendUnsafe (k, a) m, k)
+
+-- Does not check whether k is present
+prependUnsafe :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
+prependUnsafe (k, a) (Order m v) = Order (EnumMap.insert k a m) (Seq.singleton k <> v)
+
+prepend :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
+prepend a o = let k = next o in (prependUnsafe (k, a) o, k)
 
 -- | Return the keys in order.
 keys :: Order k a -> Seq k
