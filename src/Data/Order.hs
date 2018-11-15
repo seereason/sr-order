@@ -21,7 +21,7 @@
 -- ListLike instance that treats it as a sequence of (k, a) pairs.
 
 module Data.Order
-    ( Order(Order)
+    ( Order(Order, _map, _vec)
     , toPairList
     -- * Builder
     , fromPairs
