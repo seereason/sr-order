@@ -23,8 +23,6 @@
 module Data.Order
     ( Order(Order)
     , toPairList
-    -- * Lenses
-    , map, vec
     -- * Builder
     , fromPairs
     -- * Operators
@@ -88,14 +86,12 @@ data Order k v =
     , _vec :: Seq k
     } deriving (Data, Typeable, Functor, Read)
 
-$(makeLenses ''Order)
-
 instance (Ord k, Enum k) => IsList (Order k v) where
   type Item (Order k v) = (k, v)
   fromList = fromPairs
   toList = GHC.Exts.toList . toPairs
 
-instance (Ord k, Enum k, SafeCopy k, SafeCopy v, Serialize k, Serialize v) => Serialize (Order k v) where
+instance (Ord k, Enum k, SafeCopy k, SafeCopy v{-, Serialize k, Serialize v-}) => Serialize (Order k v) where
     put = safePut
     get = safeGet
 
@@ -117,7 +113,7 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
 #endif
 
 instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
-    show o = "fromList " ++ show (toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
+    show o = "fromPairs " ++ show (toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
 
 instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
     (<>) a b = Order (mappend (_map a) (_map b)) (_vec a <> _vec b)
@@ -183,7 +179,7 @@ toPairList = toList . toPairs
 -- pos = Order.pos . toOrder
 
 -- Order k v instances
-instance (Ord k, Enum k) => IsOrder  (Order k v) where fromOrder = id
+instance IsOrder  (Order k v) where fromOrder = id
 instance (Ord k, Enum k) => HasOrder (Order k v) where toOrder = id
 instance (Ord k, Enum k) => HasMap   (Order k v) where toMap = Map.fromList . GHC.Exts.toList . toPairs
 
@@ -207,7 +203,7 @@ instance (Ord k, Enum k) => IsOrder (AList k v) where fromOrder = AList . GHC.Ex
 instance (Ord k, Enum k) => HasOrder (AList k v) where toOrder = fromPairs . unAList
 #endif
 
-fromPairs :: forall t k a. (Ord k, Enum k, Foldable t, Functor t) => t (k, a) -> Order k a
+fromPairs :: forall t k a. (Enum k, Foldable t) => t (k, a) -> Order k a
 fromPairs pairs =
     Order (fromList (fmap (over _1 fromEnum) pairs'))
           (fromList (fmap fst pairs'))
@@ -215,7 +211,7 @@ fromPairs pairs =
       pairs' :: [(k, a)]
       pairs' = Foldable.toList pairs
 
-toPairs' :: (Ord k, Enum k) => Order k a -> Seq (k, a)
+toPairs' :: (Enum k) => Order k a -> Seq (k, a)
 toPairs' (Order m v) = fmap (\k -> (k, m ! k)) v
 
 prop_fromPairs :: Order Char String -> Bool
@@ -223,7 +219,7 @@ prop_fromPairs o = fromPairs (toPairs o) == o
 
 -- | Lookup key by position.  A lookup function appears in
 -- containers in version 0.5.8.
-lookupKey :: Enum k => Int -> Order k a -> Maybe k
+lookupKey :: Int -> Order k a -> Maybe k
 lookupKey i o | i < 0 || i >= length (keys o) = Nothing
 lookupKey i o = Just (Seq.index (keys o) i)
 
@@ -250,7 +246,7 @@ prop_lookupKey (InsertPosition o i) a =
           k = next o
 
 -- | Like Map.lookup.
-lookup :: (Enum k, Ord k) => k -> Order k a -> Maybe a
+lookup :: (Enum k) => k -> Order k a -> Maybe a
 lookup k (Order m _) = EnumMap.lookup k m
 
 prop_lookup :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
@@ -260,7 +256,7 @@ prop_lookup (InsertPosition o i) a =
           k = next o
 
 -- | Lookup pair by position
-lookupPair :: (Enum k, Ord k) => Int -> Order k a  -> Maybe (k, a)
+lookupPair :: (Enum k) => Int -> Order k a  -> Maybe (k, a)
 lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (Data.Order.lookup k o))
 
 prop_lookupPair :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
@@ -305,10 +301,10 @@ append :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
 append a m = let k = next m in (Data.Order.appendUnsafe (k, a) m, k)
 
 -- Does not check whether k is present
-prependUnsafe :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
+prependUnsafe :: (Enum k) => (k, a) -> Order k a -> Order k a
 prependUnsafe (k, a) (Order m v) = Order (EnumMap.insert k a m) (Seq.singleton k <> v)
 
-prepend :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
+prepend :: (Enum k) => a -> Order k a -> (Order k a, k)
 prepend a o = let k = next o in (prependUnsafe (k, a) o, k)
 
 -- | Return the keys in order.
@@ -340,11 +336,11 @@ pos k (Order _ v) =
       (x, _) -> Just (Seq.length x)
 
 -- | Return the values in order.
-values :: (Enum k, Ord k) => Order k a -> Seq a
+values :: (Enum k) => Order k a -> Seq a
 values x = fmap (\k -> _map x ! k) (keys x)
 
 -- | Based on Data.Map.mapKeys
-mapKeys :: (Enum k1, Enum k2, Ord k2) => (k1 -> k2) -> Order k1 a -> Order k2 a
+mapKeys :: {-(Enum k1, Enum k2, Ord k2) =>-} (k1 -> k2) -> Order k1 a -> Order k2 a
 mapKeys f (Order m v) = Order m (fmap f v)
 
 ilookup :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a)
@@ -361,7 +357,7 @@ view k o@(Order m v) =
     Just (i, a) -> Just (i, a, Order (EnumMap.delete k m) (Seq.filter (/= k) v))
     Nothing -> Nothing
 
-member :: (Enum k, Ord k) => k -> Order k v -> Bool
+member :: (Enum k) => k -> Order k v -> Bool
 member k o = EnumMap.member k (_map o)
 
 instance (Ord k, Eq v) => Eq (Order k v) where
@@ -371,7 +367,8 @@ instance (Enum k, Ord k, Eq v, Ord v) => Ord (Order k v) where
     compare a b = compare (_vec a) (_vec b) <> compare (_map a) (_map b)
 
 -- @@
--- λ> traverse (++ "!") (fromList
+-- λ> traverse (++ "!") (Data.Order.fromPairs [('a', "1"),('b',"2")] :: Order Char String)
+-- [fromList [('a','1'),('b','2')], fromList [('a','1'),('b','!')],fromList [('a','!'),('b','2')],fromList [('a','!'),('b','!')]] :: [Order Char Char]
 -- @@
 instance (Enum k, Ord k) => Traversable (Order k) where
     traverse f (Order m v) = Order <$> traverse f m <*> pure v
@@ -379,13 +376,46 @@ instance (Enum k, Ord k) => Traversable (Order k) where
 instance (Enum k, Ord k) => TraversableWithIndex k (Order k) where
     itraverse f (Order m v) = Order <$> itraverse (\k a -> f (toEnum k) a) m <*> pure v
 
+-- | An Order has two notions of an 'Index', the 'Int' index of the
+-- list and the @k@ index of the map.  Here is the 'Ixed' instance
+-- for the latter, which only needs to address the _map field.
+-- @@
+-- λ> set (ix 'a') 30 (fromPairs [('a',10),('b',20)])
+-- fromPairs [('a',30),('b',20)] :: Order (Char) (Integer)
+-- @@
+
 type instance Index (Order k a) = k
 type instance IxValue (Order k a) = a
-instance (Enum k, Ord k) => Ixed (Order k a) where
-    ix i f o@(Order m v) =
-        case EnumMap.lookup i m of
-          Just a -> f a <&> \a' -> Order (EnumMap.insert i a' m) v
+instance Enum k => Ixed (Order k a) where
+    ix k f o@(Order mp sq) =
+        case EnumMap.lookup k mp of
+          Just a -> fmap (\a' -> Order (EnumMap.insert k a' mp) sq) (f a)
           Nothing -> pure o
+
+-- | 'At' instance.
+-- @@
+-- λ> set (at 'a') Nothing (fromPairs [('a',10),('b',20)])
+-- fromPairs [('b',20)] :: Order (Char) (Integer)
+-- λ> set (at 'b') (Just 40) (fromPairs [('a',10),('b',20)])
+-- fromPairs [('a',10),('b',40)] :: Order (Char) (Integer)
+-- @@
+-- New elements appear at the end (positions of existing elements do
+-- not change):
+-- @@
+-- λ> set (at 'x') (Just 30) (fromPairs [('a',10),('b',20)])
+-- fromPairs [('a',10),('b',20),('x',30)] :: Order (Char) (Integer)
+-- @@
+instance (Enum k, Eq k) => At (Order k a) where
+    at k f o@(Order mp sq) =
+        case EnumMap.lookup k mp of
+          Just a ->
+              fmap (maybe (Order (EnumMap.delete k mp) (Seq.filter (/= k) sq))
+                          (\a' -> Order (EnumMap.insert k a' mp) sq))
+                   (f (Just a))
+          Nothing ->
+              fmap (maybe o
+                          (\a' -> Order (EnumMap.insert k a' mp) (sq <> Seq.singleton k)))
+                   (f Nothing)
 
 instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
