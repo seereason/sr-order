@@ -26,18 +26,20 @@ library
     data-default,
     lens,
     ListLike,
-    QuickCheck,
     safecopy,
     template-haskell,
     th-lift,
     th-lift-instances,
-    vector,
-    web-routes,
-    web-routes-th
+    vector
   exposed-modules:
     Data.EnumMap
     Data.Order
   default-language: Haskell2010
+
+  if !impl(ghcjs)
+    Build-Depends:
+      QuickCheck
+
 
 test-suite order-tests
   default-language: Haskell2010

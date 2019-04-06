@@ -36,6 +36,7 @@ module Data.Order
     , splitAt, Data.Order.drop, Data.Order.take
     , append, prepend, appendUnsafe, prependUnsafe
     -- * Allocate new keys
+#if !__GHCJS__
     -- * QuickCheck property
     , tests
     , prop_next
@@ -45,6 +46,7 @@ module Data.Order
     , prop_lookupKey
     , prop_lookupPair
     , prop_splitAt
+#endif
     -- * Is/Has classes and instances
     , IsMap(..)
     , HasMap(..)
@@ -78,7 +80,9 @@ import GHC.Exts
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Lift (deriveLiftMany)
 import Prelude hiding (foldMap, length, lookup, map, splitAt, zip)
+#if !__GHCJS__
 import Test.QuickCheck (Arbitrary(arbitrary), choose, Gen, quickCheckResult, Result, shuffle, sized, vector, vectorOf)
+#endif
 
 data Order k v =
   Order
@@ -225,13 +229,16 @@ lookupKey i o = Just (Seq.index (keys o) i)
 
 data InsertPosition k v = InsertPosition (Order k v) Int deriving Show
 
+#if !__GHCJS__
 instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
       InsertPosition o <$> choose (0, length o)
+#endif
 
 data ElementPosition k v = ElementPosition (Order k v) (Maybe Int) deriving Show
 
+#if !__GHCJS__
 instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
@@ -244,34 +251,41 @@ prop_lookupKey (InsertPosition o i) a =
     lookupKey i o' == Just k && lookupKey (length o) o == Nothing
     where o' = insertAtUnsafe i (k, a) o
           k = next o
+#endif
 
 -- | Like Map.lookup.
 lookup :: (Enum k) => k -> Order k a -> Maybe a
 lookup k (Order m _) = EnumMap.lookup k m
 
+#if !__GHCJS__
 prop_lookup :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookup (InsertPosition o i) a =
     lookup k o' == Just a && lookup k o == Nothing
     where o' = insertAtUnsafe i (k, a) o
           k = next o
+#endif
 
 -- | Lookup pair by position
 lookupPair :: (Enum k) => Int -> Order k a  -> Maybe (k, a)
 lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (Data.Order.lookup k o))
 
+#if !__GHCJS__
 prop_lookupPair :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupPair (InsertPosition o i) a =
     lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
     where o' = insertAtUnsafe i (k, a) o
           k = next o
+#endif
 
 splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
 splitAt n = over _1 fromPairs . over _2 fromPairs . Seq.splitAt n . toPairs
 
+#if !__GHCJS__
 prop_splitAt :: (k ~ Char, a ~ String) => ElementPosition k a -> Bool
 prop_splitAt (ElementPosition o i) =
     let (a, b) = splitAt (maybe 0 id i) o in
     o == a <> b
+#endif
 
 -- Does not check whether k is present
 insertAtUnsafe :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
@@ -311,8 +325,10 @@ prepend a o = let k = next o in (prependUnsafe (k, a) o, k)
 keys :: Order k a -> Seq k
 keys = _vec
 
+#if !__GHCJS__
 prop_keys :: Order Char String -> Bool
 prop_keys (Order m v) = EnumMap.keysSet m == Set.fromList (Foldable.toList v)
+#endif
 
 -- | Return the next available key
 -- @@
@@ -325,8 +341,10 @@ next :: Enum k => Order k a -> k
 next (Order m _) = head (dropWhile (`EnumMap.member` m) [toEnum 0 ..])
 -- next (Order m _) = maybe (toEnum 0) (succ . toEnum . fst) (Set.maxView (EnumMap.keysSet m))
 
+#if !__GHCJS__
 prop_next :: Order Char String -> Bool
 prop_next o = isNothing (Seq.elemIndexL (next o) (keys o))
+#endif
 
 -- | Return the position of a key, Nothing if absent.
 pos :: Eq k => k -> Order k a -> Maybe Int
@@ -417,12 +435,14 @@ instance (Enum k, Eq k) => At (Order k a) where
                           (\a' -> Order (EnumMap.insert k a' mp) (sq <> Seq.singleton k)))
                    (f Nothing)
 
+#if !__GHCJS__
 instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
       let ks' = Seq.fromList (nub ks)
       vs <- vector (length ks')
       return (fromPairs (Seq.zip ks' (Seq.fromList vs)))
+#endif
 
 #if 0
 instance (Enum k, Ord k, Monoid (Order k v)) => LL.ListLike (Order k v) (k, v) where
@@ -474,6 +494,7 @@ permute neworder (Order m v) =
       (a, _) | List.nub (toList a) /= toList a -> Left "duplicate keys"
       _ -> Right (Order m neworder)
 
+#if !__GHCJS__
 tests :: IO Result
 tests = do
   msum [ quickCheckResult prop_next
@@ -483,3 +504,4 @@ tests = do
        , quickCheckResult prop_lookupKey
        , quickCheckResult prop_lookupPair
        , quickCheckResult prop_splitAt ]
+#endif
