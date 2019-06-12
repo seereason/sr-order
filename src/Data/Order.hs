@@ -95,7 +95,7 @@ instance (Ord k, Enum k) => IsList (Order k v) where
   fromList = fromPairs
   toList = GHC.Exts.toList . toPairs
 
-instance (Ord k, Enum k, SafeCopy k, SafeCopy v{-, Serialize k, Serialize v-}) => Serialize (Order k v) where
+instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Serialize (Order k v) where
     put = safePut
     get = safeGet
 
@@ -103,7 +103,7 @@ instance (Ord k, Enum k, SafeCopy k, SafeCopy v{-, Serialize k, Serialize v-}) =
 -- Could not deduce (Ord k) arising from a use of ‘extension’
 $(deriveSafeCopy 1 'extension ''Order)
 #else
-instance (Ord k, Enum k, SafeCopy k, SafeCopy a) => SafeCopy (Order k a) where
+instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy a, Typeable a) => SafeCopy (Order k a) where
     putCopy (Order m v) =
         contain $ do safePut m
                      safePut v

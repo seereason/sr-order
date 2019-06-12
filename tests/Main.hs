@@ -38,7 +38,9 @@ tests = $quickCheckAll
 
 main :: IO ()
 main = do
+#if !__GHCJS__
   Order.tests
+#endif
   Main.tests
   counts <- runTestTT $ TestList $
     []
