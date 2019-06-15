@@ -76,6 +76,7 @@ import qualified Data.Set as Set
 import qualified Data.Semigroup as Sem
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import GHC.Exts
+import GHC.Generics (Generic)
 -- import qualified Data.Vector as Vector
 import Instances.TH.Lift ()
 import Language.Haskell.TH.Lift (deriveLiftMany)
@@ -88,7 +89,7 @@ data Order k v =
   Order
     { _map :: EnumMap k v
     , _vec :: Seq k
-    } deriving (Data, Typeable, Functor, Read)
+    } deriving (Generic, Data, Typeable, Functor, Read)
 
 instance (Ord k, Enum k) => IsList (Order k v) where
   type Item (Order k v) = (k, v)
