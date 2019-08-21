@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -14,6 +15,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | A combination of a Map and a Sequence - that is, each element of the
 -- Map has a unique sequence number between zero and the number of
@@ -22,9 +24,12 @@
 
 module Data.Order
     ( Order(Order, _map, _vec)
+    , Order_1(..)
+    , HasKey(KeyType, getKey)
     , toPairList
     -- * Builder
     , fromPairs
+    , fromPairs'
     -- * Operators
     , keys, values, pos, Data.Order.lookup, ilookup, view
     , Data.Order.next, mapKeys
@@ -67,7 +72,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map (fromList{-, toList-})
 import Data.Maybe (isNothing)
 import Data.Monoid
-import Data.SafeCopy (base, contain, SafeCopy(..), safeGet, safePut)
+import Data.SafeCopy (base, contain, extension, Migrate(..), SafeCopy(..), SafeCopy', safeGet, safePut)
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Serialize (Serialize(..))
@@ -91,31 +96,74 @@ data Order k v =
     , _vec :: Seq k
     } deriving (Generic, Data, Typeable, Functor, Read)
 
-instance (Ord k, Enum k) => IsList (Order k v) where
-  type Item (Order k v) = (k, v)
-  fromList = fromPairs
-  toList = GHC.Exts.toList . toPairs
+#if 0
+$(deriveSafeCopy 2 'extension ''Order)
+#else
+instance (Ord k, Enum k, SafeCopy' k, SafeCopy' v, k ~ KeyType v) => SafeCopy (Order k v) where
+    putCopy (Order m v) =
+         contain $ do safePut m
+                      safePut v
+    getCopy =
+         contain $ do m <- safeGet
+                      v <- safeGet
+                      return $ Order m v
+    version = 2
+    kind = extension
+    errorTypeName _ = "Order"
+#endif
 
-instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Serialize (Order k v) where
-    put = safePut
-    get = safeGet
+-- The only change is the HasKey constraint.
+instance (Ord k, Enum k, SafeCopy' k, SafeCopy' v, k ~ KeyType v) => Migrate (Order k v) where
+  type MigrateFrom (Order k v) = Order_1 k v
+  migrate (Order_1 mp vec) = Order mp vec
+
+data Order_1 k v =
+  Order_1
+    { _map_1 :: EnumMap k v
+    , _vec_1 :: Seq k
+    } deriving Generic
+
+instance (Ord k, Enum k) => IsList (Order_1 k v) where
+  type Item (Order_1 k v) = (k, v)
+  fromList pairs = error "instance IsList (Order_1 k v)"
+  toList = error "instance IsList (Order_1 k v)"
+
+type instance Index (Order_1 k a) = k
+type instance IxValue (Order_1 k a) = a
 
 #if 0
 -- Could not deduce (Ord k) arising from a use of ‘extension’
-$(deriveSafeCopy 1 'extension ''Order)
+$(deriveSafeCopy 1 'Base ''Order_1)
 #else
-instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy a, Typeable a) => SafeCopy (Order k a) where
-    putCopy (Order m v) =
+instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy a, Typeable a) => SafeCopy (Order_1 k a) where
+    putCopy (Order_1 m v) =
         contain $ do safePut m
                      safePut v
     getCopy =
         contain $ do m <- safeGet
                      v <- safeGet
-                     return $ Order m v
+                     return $ Order_1 m v
     version = 1
     kind = base
-    errorTypeName _ = "Order"
+    errorTypeName _ = "Order_1"
 #endif
+
+class Enum (KeyType v) => HasKey v where
+  type KeyType v
+  getKey :: v -> KeyType v
+
+instance Enum k => HasKey (k, v) where
+  type KeyType (k, v) = k
+  getKey (k, _) = k
+
+instance (Ord k, Enum k) => IsList (Order k v) where
+  type Item (Order k v) = (k, v)
+  fromList = fromPairs
+  toList = GHC.Exts.toList . toPairs
+
+instance (k ~ KeyType v, Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Serialize (Order k v) where
+    put = safePut
+    get = safeGet
 
 instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
     show o = "fromPairs " ++ show (toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
@@ -215,6 +263,9 @@ fromPairs pairs =
     where
       pairs' :: [(k, a)]
       pairs' = Foldable.toList pairs
+
+fromPairs' :: forall t k a. (Functor t, Enum k, Foldable t) => t (k, a) -> Order k (k, a)
+fromPairs' = fromPairs . fmap (\(k, a) -> (k, (k, a)))
 
 toPairs' :: (Enum k) => Order k a -> Seq (k, a)
 toPairs' (Order m v) = fmap (\k -> (k, m ! k)) v
