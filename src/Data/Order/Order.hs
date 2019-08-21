@@ -39,7 +39,7 @@ import Data.Foldable as Foldable hiding (toList)
 import Data.EnumMap as EnumMap (toList)
 import Data.List as List (nub)
 import Data.Map as Map ((!), Map)
---import Data.Order.HasKey (KeyType)
+import Data.Order.HasKey (KeyType)
 import Data.Order.HasMap (HasMap(toMap))
 import Data.Order.Old (Order_1(Order_1))
 import qualified Data.Map as Map (delete, fromList, insert, lookup, mapWithKey)
@@ -91,18 +91,18 @@ instance (Ord k, Enum k) => IsList (Order k v) where
   fromList = fromPairs
   toList = GHC.toList . toPairs
 
-fromPairs :: forall t k a. (Ord k, Foldable t) => t (k, a) -> Order k a
+fromPairs :: forall t k v. (Ord k, Foldable t) => t (k, v) -> Order k v
 fromPairs pairs =
     Order (Map.fromList pairs')
           (GHC.fromList (fmap fst pairs'))
     where
-      pairs' :: [(k, a)]
+      pairs' :: [(k, v)]
       pairs' = Foldable.toList pairs
 
-fromPairs' :: forall t k a. (Functor t, Ord k, Foldable t) => t (k, a) -> Order k (k, a)
-fromPairs' = fromPairs . fmap (\(k, a) -> (k, (k, a)))
+fromPairs' :: forall t k v. (Functor t, Ord k, Foldable t) => t (k, v) -> Order k (k, v)
+fromPairs' = fromPairs . fmap (\(k, v) -> (k, (k, v)))
 
-toPairs' :: (Ord k) => Order k a -> Seq (k, a)
+toPairs' :: (Ord k) => Order k v -> Seq (k, v)
 toPairs' (Order m v) = fmap (\k -> (k, m ! k)) v
 
 instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Serialize (Order k v) where
@@ -178,12 +178,12 @@ instance (Enum k, Ord k) => TraversableWithIndex k (Order k) where
 -- fromPairs [('a',30),('b',20)] :: Order (Char) (Integer)
 -- @@
 
-type instance Index (Order k a) = k
-type instance IxValue (Order k a) = a
-instance Ord k => Ixed (Order k a) where
+type instance Index (Order k v) = k
+type instance IxValue (Order k v) = v
+instance Ord k => Ixed (Order k v) where
     ix k f o@(Order mp sq) =
         case Map.lookup k mp of
-          Just a -> fmap (\a' -> Order (Map.insert k a' mp) sq) (f a)
+          Just v -> fmap (\v' -> Order (Map.insert k v' mp) sq) (f v)
           Nothing -> pure o
 
 -- | 'At' instance.
@@ -199,16 +199,16 @@ instance Ord k => Ixed (Order k a) where
 -- λ> set (at 'x') (Just 30) (fromPairs [('a',10),('b',20)])
 -- fromPairs [('a',10),('b',20),('x',30)] :: Order (Char) (Integer)
 -- @@
-instance (Ord k, Eq k) => At (Order k a) where
+instance (Ord k, Eq k) => At (Order k v) where
     at k f o@(Order mp sq) =
         case Map.lookup k mp of
-          Just a ->
+          Just v ->
               fmap (maybe (Order (Map.delete k mp) (Seq.filter (/= k) sq))
-                          (\a' -> Order (Map.insert k a' mp) sq))
-                   (f (Just a))
+                          (\v' -> Order (Map.insert k v' mp) sq))
+                   (f (Just v))
           Nothing ->
               fmap (maybe o
-                          (\a' -> Order (Map.insert k a' mp) (sq <> Seq.singleton k)))
+                          (\v' -> Order (Map.insert k v' mp) (sq <> Seq.singleton k)))
                    (f Nothing)
 
 #if !__GHCJS__
@@ -227,7 +227,7 @@ instance (Enum k, Ord k, Monoid (Order k v)) => LL.ListLike (Order k v) (k, v) w
           Nothing -> Nothing
           Just (k, ks) -> Just ((k, _map m ! k), Order {_map = Map.delete k (_map m), _vec = ks})
     null = Map.null . _map
-    singleton (k, a) = Order {_map = Map.singleton k a, _vec = singleton k}
+    singleton (k, v) = Order {_map = Map.singleton k v, _vec = singleton k}
 {-
     head m = case uncons (order m) of
                Just (hd, _) -> elems m ! hd
