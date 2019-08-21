@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, RankNTypes, ScopedTypeVariables, TupleSections, TypeFamilies #-}
+{-# LANGUAGE CPP, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TupleSections, TypeFamilies, UndecidableInstances #-}
 
 module Data.Order.Functions
   where
@@ -10,9 +10,11 @@ import Data.List as List (nub)
 import Data.Map as Map ((!))
 import qualified Data.Map as Map (delete, insert, keys, lookup, mapKeys, member)
 import Data.Monoid
+import Data.Order.HasKey(KeyType)
 import Data.Order.Order
 import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
+import Data.Typeable (Typeable)
 import GHC.Exts as GHC
 import Instances.TH.Lift ()
 import Prelude hiding (foldMap, length, lookup, map, splitAt, zip)
@@ -29,7 +31,7 @@ toPairList = GHC.toList . toPairs
 -- pos :: HasOrder o => o -> Index o -> Maybe Int
 -- pos = Order.pos . toOrder
 
-prop_fromPairs :: Order Char String -> Bool
+prop_fromPairs :: Order Char (Char, String) -> Bool
 prop_fromPairs o = fromPairs (toPairs o) == o
 
 -- | Lookup key by position.  A lookup function appears in
@@ -38,29 +40,31 @@ lookupKey :: Int -> Order k a -> Maybe k
 lookupKey i o | i < 0 || i >= length (keys o) = Nothing
 lookupKey i o = Just (Seq.index (keys o) i)
 
-data InsertPosition k v = InsertPosition (Order k v) Int deriving Show
+data InsertPosition v = InsertPosition (Order (KeyType v) v) Int
+deriving instance (k ~ KeyType v, Ord k, Enum k, Show k, Typeable k, Show v, Typeable v) => Show (InsertPosition v)
 
 #if !__GHCJS__
-instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
+instance (k ~ KeyType v, Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
       InsertPosition o <$> choose (0, length o)
 #endif
 
-data ElementPosition k v = ElementPosition (Order k v) (Maybe Int) deriving Show
+data ElementPosition v = ElementPosition (Order (KeyType v) v) (Maybe Int)
+deriving instance (k ~ KeyType v, Ord k, Enum k, Show k, Typeable k, Show v, Typeable v) => Show (ElementPosition v)
 
 #if !__GHCJS__
-instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition k v) where
+instance (k ~ KeyType v, Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
       case length o of
         0 -> return $ ElementPosition o Nothing
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
 
-prop_lookupKey :: (k ~ Char, a ~ (Char, String)) => InsertPosition k a -> a -> Bool
-prop_lookupKey (InsertPosition o i) a =
+prop_lookupKey :: (k ~ Char, v ~ (Char, String)) => InsertPosition v -> v -> Bool
+prop_lookupKey (InsertPosition o i) v =
     lookupKey i o' == Just k && lookupKey (length o) o == Nothing
-    where o' = insertAtUnsafe i (k, a) o
+    where o' = insertAtUnsafe i (k, v) o
           k = next o
 #endif
 
@@ -69,10 +73,10 @@ lookup :: (Ord k) => k -> Order k a -> Maybe a
 lookup k (Order m _) = Map.lookup k m
 
 #if !__GHCJS__
-prop_lookup :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
-prop_lookup (InsertPosition o i) a =
-    Data.Order.Functions.lookup k o' == Just a && Data.Order.Functions.lookup k o == Nothing
-    where o' = insertAtUnsafe i (k, a) o
+prop_lookup :: (k ~ Char, v ~ (Char, String)) => InsertPosition v -> v -> Bool
+prop_lookup (InsertPosition o i) v =
+    Data.Order.Functions.lookup k o' == Just v && Data.Order.Functions.lookup k o == Nothing
+    where o' = insertAtUnsafe i (k, v) o
           k = next o
 #endif
 
@@ -81,10 +85,10 @@ lookupPair :: (Ord k) => Int -> Order k a  -> Maybe (k, a)
 lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (Data.Order.Functions.lookup k o))
 
 #if !__GHCJS__
-prop_lookupPair :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
-prop_lookupPair (InsertPosition o i) a =
-    lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
-    where o' = insertAtUnsafe i (k, a) o
+prop_lookupPair :: (k ~ Char, v ~ (Char, String)) => InsertPosition v -> v -> Bool
+prop_lookupPair (InsertPosition o i) v =
+    lookupPair i o' == Just (k, v) && lookupPair (length o) o == Nothing
+    where o' = insertAtUnsafe i (k, v) o
           k = next o
 #endif
 
@@ -92,18 +96,18 @@ splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
 splitAt n = over _1 fromPairs . over _2 fromPairs . Seq.splitAt n . toPairs
 
 #if !__GHCJS__
-prop_splitAt :: (k ~ Char, a ~ String) => ElementPosition k a -> Bool
+prop_splitAt :: (k ~ Char, v ~ (Char, String)) => ElementPosition v -> Bool
 prop_splitAt (ElementPosition o i) =
     let (a, b) = splitAt (maybe 0 id i) o in
     o == a <> b
 #endif
 
 -- Does not check whether k is present
-insertAtUnsafe :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
-insertAtUnsafe n (k, a) o = uncurry (<>) . over _2 (prependUnsafe (k, a)) . splitAt n $ o
+insertAtUnsafe :: (k ~ KeyType v, Enum k, Ord k) => Int -> (k, v) -> Order k v -> Order k v
+insertAtUnsafe n (k, v) o = uncurry (<>) . over _2 (prependUnsafe (k, v)) . splitAt n $ o
 
-insertAt :: (Enum k, Ord k) => Int -> a -> Order k a -> (Order k a, k)
-insertAt n a o = let k = next o in (insertAtUnsafe n (k, a) o, k)
+insertAt :: (k ~ KeyType v, Enum k, Ord k) => Int -> v -> Order k v -> (Order k v, k)
+insertAt n v o = let k = next o in (insertAtUnsafe n (k, v) o, k)
 
 drop :: (Ord k) => Int -> Order k a -> Order k a
 drop n (Order m v) =
@@ -115,15 +119,15 @@ take n (Order m v) =
   let (a, b) = Seq.splitAt n v in
   Order (Foldable.foldr Map.delete m b) a
 
-deleteAt :: (Enum k, Ord k) => Int -> Order k a -> Order k a
+deleteAt :: (k ~ KeyType v, Enum k, Ord k) => Int -> Order k v -> Order k v
 deleteAt n = uncurry (<>) . over _2 (Data.Order.Functions.drop 1) . splitAt n
 
 -- Does not check whether k is present
-appendUnsafe :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
-appendUnsafe (k, a) m = Data.Order.Functions.insertAtUnsafe (length m) (k, a) m
+appendUnsafe :: (k ~ KeyType v, Enum k, Ord k) => (k, v) -> Order k v -> Order k v
+appendUnsafe (k, v) m = Data.Order.Functions.insertAtUnsafe (length m) (k, v) m
 
-append :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
-append a m = let k = next m in (Data.Order.Functions.appendUnsafe (k, a) m, k)
+append :: (k ~ KeyType v, Enum k, Ord k) => v -> Order k v -> (Order k v, k)
+append v m = let k = next m in (Data.Order.Functions.appendUnsafe (k, v) m, k)
 
 -- Does not check whether k is present
 prependUnsafe :: (Ord k) => (k, a) -> Order k a -> Order k a
@@ -137,7 +141,7 @@ keys :: Order k a -> Seq k
 keys = _vec
 
 #if !__GHCJS__
-prop_keys :: Order Char String -> Bool
+prop_keys :: Order Char (Char, String) -> Bool
 prop_keys (Order m v) = Map.keysSet m == Set.fromList (Foldable.toList v)
 #endif
 
@@ -153,7 +157,7 @@ next (Order m _) = head (dropWhile (`Map.member` m) [toEnum 0 ..])
 -- next (Order m _) = maybe (toEnum 0) (succ . toEnum . fst) (Set.maxView (Map.keysSet m))
 
 #if !__GHCJS__
-prop_next :: Order Char String -> Bool
+prop_next :: Order Char (Char, String) -> Bool
 prop_next o = isNothing (Seq.elemIndexL (next o) (keys o))
 #endif
 

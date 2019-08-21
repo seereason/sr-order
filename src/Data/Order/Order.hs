@@ -37,7 +37,6 @@ import Data.Data (Data)
 import qualified Data.Foldable as Foldable
 import Data.Foldable as Foldable hiding (toList)
 import Data.EnumMap as EnumMap (toList)
-import Data.List as List (nub)
 import Data.Map as Map ((!), Map)
 import Data.Order.HasKey (KeyType)
 import Data.Order.HasMap (HasMap(toMap))
@@ -56,6 +55,7 @@ import Instances.TH.Lift ()
 import Language.Haskell.TH.Lift (deriveLiftMany)
 import Prelude hiding (foldMap, length, lookup, map, splitAt, zip)
 #if !__GHCJS__
+import Data.List as List (nub)
 import Test.QuickCheck (Arbitrary(arbitrary), shuffle, sized, vector, vectorOf)
 #endif
 
@@ -68,7 +68,7 @@ data Order k v =
 #if 0
 $(deriveSafeCopy 2 'extension ''Order)
 #else
-instance (Ord k, Enum k, SafeCopy' k, SafeCopy' v) => SafeCopy (Order k v) where
+instance (k ~ KeyType v, Ord k, Enum k, SafeCopy' k, SafeCopy' v) => SafeCopy (Order k v) where
     putCopy (Order m v) =
          contain $ do safePut m
                       safePut v
@@ -105,14 +105,14 @@ fromPairs' = fromPairs . fmap (\(k, v) -> (k, (k, v)))
 toPairs' :: (Ord k) => Order k v -> Seq (k, v)
 toPairs' (Order m v) = fmap (\k -> (k, m ! k)) v
 
-instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Serialize (Order k v) where
+instance (k ~ KeyType v, Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Serialize (Order k v) where
     put = safePut
     get = safeGet
 
-instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
+instance forall k v. (k ~ KeyType v, Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
     show o = "fromPairs " ++ show (GHC.toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
 
-instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
+instance (k ~ KeyType v, Enum k, Ord k) => Sem.Semigroup (Order k v) where
     (<>) a b = Order (mappend (_map a) (_map b)) (_vec a <> _vec b)
     -- ^ If there are any common @k@ values in the shared
     -- map the elements from the second is omitted.  For
@@ -122,7 +122,7 @@ instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
     --   mapKeys Left a <> mapKeys Right b
     -- @@
 
-instance (Enum k, Ord k) => Monoid (Order k v) where
+instance (k ~ KeyType v, Enum k, Ord k) => Monoid (Order k v) where
     mempty = Order mempty mempty
 #if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
