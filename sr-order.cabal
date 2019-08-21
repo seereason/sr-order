@@ -34,6 +34,12 @@ library
   exposed-modules:
     Data.EnumMap
     Data.Order
+    Data.Order.Functions
+    Data.Order.HasKey
+    Data.Order.HasMap
+    Data.Order.IsMap
+    Data.Order.Old
+    Data.Order.Order
   default-language: Haskell2010
 
   if !impl(ghcjs)
