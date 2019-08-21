@@ -47,5 +47,5 @@ prepend a m = let k = next m in (m {next = succ k, elems = Map.insert k a (elems
 
 moveHead :: Int -> Order k v -> Order k v
 moveHead 0 m = m
-moveHead n (m {order = (k : ks)}) =
-    let (ks1, ks2) = splitAt (n - 1) ks in m {order = ks1 ++ [k] ++ ks2}
+moveHead n (Order mp (k : ks)) =
+    let (ks1, ks2) = splitAt (n - 1) ks in m (Order mp (ks1 ++ [k] ++ ks2))
