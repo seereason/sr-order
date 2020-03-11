@@ -6,13 +6,16 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS -Wall #-}
 
 -- | A combination of a Map and a Sequence - that is, each element of the
@@ -36,6 +39,7 @@ module Data.Order
     , splitAt, Data.Order.drop, Data.Order.take
     , append, prepend, appendUnsafe, prependUnsafe
     -- * Allocate new keys
+#if 0
 #if !__GHCJS__
     -- * QuickCheck property
     , tests
@@ -46,6 +50,7 @@ module Data.Order
     , prop_lookupKey
     , prop_lookupPair
     , prop_splitAt
+#endif
 #endif
     -- * Is/Has classes and instances
     , IsMap(..)
@@ -58,20 +63,19 @@ import Control.Lens hiding (view)
 import Data.Data (Data)
 import qualified Data.Foldable as Foldable
 import Data.Foldable as Foldable hiding (toList)
---import qualified Data.ListLike as LL
+import qualified Data.ListLike as LL
 --import Data.ListLike as LL (filter, ListLike, FoldableLL, fromListLike, nub, sort, zip)
-import Data.EnumMap as EnumMap ((!), EnumMap, keysSet, mapWithKey, member)
+import Data.EnumMap as EnumMap ((!), EnumMap, mapWithKey, member)
 import qualified Data.EnumMap as EnumMap
 import Data.List as List (nub)
 import Data.Map (Map)
 import qualified Data.Map as Map (fromList{-, toList-})
-import Data.Maybe (isNothing)
 import Data.Monoid
 import Data.SafeCopy (base, contain, SafeCopy(..), safeGet, safePut)
-import Data.Sequence (Seq)
+import Data.Sequence (Seq((:<|)))
 import qualified Data.Sequence as Seq
 import Data.Serialize (Serialize(..))
-import qualified Data.Set as Set
+--import qualified Data.Set as Set
 --import Data.IntSet as Set (maxView)
 import qualified Data.Semigroup as Sem
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
@@ -82,6 +86,9 @@ import Instances.TH.Lift ()
 import Language.Haskell.TH.Lift (deriveLiftMany)
 import Prelude hiding (foldMap, length, lookup, map, splitAt, zip)
 #if !__GHCJS__
+import Data.EnumMap as EnumMap (keysSet)
+import Data.Maybe (isNothing)
+import qualified Data.Set as Set (fromList)
 import Test.QuickCheck (Arbitrary(arbitrary), choose, Gen, quickCheckResult, Result, shuffle, sized, vector, vectorOf)
 #endif
 
@@ -445,27 +452,20 @@ instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Ord
       return (fromPairs (Seq.zip ks' (Seq.fromList vs)))
 #endif
 
-#if 0
-instance (Enum k, Ord k, Monoid (Order k v)) => LL.ListLike (Order k v) (k, v) where
-    uncons m =
-        case LL.uncons (keys m) of
-          Nothing -> Nothing
-          Just (k, ks) -> Just ((k, _map m ! k), Order {_map = EnumMap.delete k (_map m), _vec = ks})
-    null = EnumMap.null . _map
-    singleton (k, a) = Order {_map = EnumMap.singleton k a, _vec = singleton k}
-{-
-    head m = case uncons (order m) of
-               Just (hd, _) -> elems m ! hd
-               _ -> error "OrderMap.head"
-    tail m = case uncons (order m) of
-               Just (hd, tl) -> m {order = tl, elems = EnumMap.delete hd (elems m), next = next m}
-               _ -> error "OrderMap.tail"
--}
+instance (Ord k, Enum k, LL.FoldableLL (Order k v) (k, v)) => LL.ListLike (Order k v) (k, v) where
+  singleton :: (k, v) -> Order k v
+  singleton (k, v) = Order (EnumMap.singleton k v) [k]
+  null :: Order k v -> Bool
+  null (Order _ ks) = LL.null ks
+  uncons :: Order k v -> Maybe ((k, v), Order k v)
+  uncons (Order mp (k0 :<| ks)) =
+    let (mk, mks) = EnumMap.partitionWithKey (\k _ -> k == k0) mp in
+      Just (LL.head (EnumMap.toList mk), Order mks ks)
+  uncons (Order _ _) = Nothing
 
 instance (Enum k, Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
     foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _map xs ! k)) r0 (_vec xs)
     foldr f r0 xs = Foldable.foldr (\k r -> f (k, _map xs ! k) r) r0 (_vec xs)
-#endif
 
 $(deriveLiftMany [''Order])
 
@@ -495,6 +495,7 @@ permute neworder (Order m v) =
       (a, _) | List.nub (toList a) /= toList a -> Left "duplicate keys"
       _ -> Right (Order m neworder)
 
+#if 0
 #if !__GHCJS__
 tests :: IO Result
 tests = do
@@ -505,4 +506,5 @@ tests = do
        , quickCheckResult prop_lookupKey
        , quickCheckResult prop_lookupPair
        , quickCheckResult prop_splitAt ]
+#endif
 #endif
