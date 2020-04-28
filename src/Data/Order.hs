@@ -80,9 +80,8 @@ import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import GHC.Exts
 import GHC.Generics (Generic)
 -- import qualified Data.Vector as Vector
-import Instances.TH.Lift ()
-import Language.Haskell.TH.Lift (deriveLiftMany)
 import Prelude hiding (foldMap, length, lookup, map, splitAt, zip)
+import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 #if !__GHCJS__
 import Data.EnumMap as EnumMap (keysSet)
 import Data.Maybe (isNothing)
@@ -123,7 +122,10 @@ instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy a, Typeable a) => Safe
 #endif
 
 instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
-    show o = "fromPairs " ++ show (toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
+  show o = "fromPairs " ++ show (toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
+
+instance forall k v. (Ord k, Enum k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (Order k v) where
+  pPrint o = text "Order " <> pPrint (toList o)
 
 instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
     (<>) a b = Order (mappend (_map a) (_map b)) (_vec a <> _vec b)
@@ -177,7 +179,7 @@ class IsOrder o where
     fromOrder :: Order (Index o) (IxValue o) -> o
 
 -- | Contains at least as much information as an Order
-class (Ord (Index o), Enum (Index o)) => HasOrder o where
+class Enum (Index o) => HasOrder o where
     toOrder :: o -> Order (Index o) (IxValue o)
     toPairs :: o -> Seq (Index o, IxValue o)
     toPairs = toPairs' . toOrder
@@ -414,10 +416,6 @@ permuteUnsafe neworder (Order m _v) =
       missing :: Seq k
       missing = Seq.fromList (EnumMap.keys (foldr EnumMap.delete m present))
 
--- deriving instance Serialize v => Serialize (EnumMap k v)
--- $(deriveLiftMany [''EnumMap])
--- $(deriveSafeCopy 1 'base ''EnumMap)
-
 -- | A permute function that verifies neworder is a valid permutation.
 permute :: forall k v. (Enum k, Ord k) => Seq k -> Order k v -> Either String (Order k v)
 permute neworder (Order m v) =
@@ -426,8 +424,6 @@ permute neworder (Order m v) =
       (a, _) | Seq.length a < Seq.length v -> Left "missing keys"
       (a, _) | List.nub (toList a) /= toList a -> Left "duplicate keys"
       _ -> Right (Order m neworder)
-
-$(deriveLiftMany [''Order])
 
 #if !__GHCJS__
 instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where

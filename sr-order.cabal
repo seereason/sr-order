@@ -27,10 +27,8 @@ library
     data-default,
     lens,
     ListLike,
+    pretty,
     safecopy,
-    template-haskell,
-    th-lift,
-    th-lift-instances,
     vector
   exposed-modules:
     Data.EnumMap
