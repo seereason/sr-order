@@ -34,10 +34,10 @@ module Data.Order
     , Data.Order.member, permute, permuteUnsafe
     -- * Positional operations
     , lookupKey, lookupPair
-    , Data.Order.insertAt, insertAtUnsafe
-    , Data.Order.deleteAt
-    , splitAt, Data.Order.drop, Data.Order.take
-    , append, prepend, appendUnsafe, prependUnsafe
+    , insertAt, insertPairAt
+    , deleteAt
+    , appendPair, appendElem
+    , prependPair, prependElem
     -- * Allocate new keys
 #if !__GHCJS__
     -- * QuickCheck property
@@ -194,7 +194,7 @@ class (Eq (Index o), Enum (Index o)) => HasOrder o where
     toPairs = toPairs' . toOrder
 
 toPairList :: (Ord k, Enum k) => Order k v -> [(k, v)]
-toPairList = toList . toPairs
+toPairList = LL.toList
 
 -- pos :: HasOrder o => o -> Index o -> Maybe Int
 -- pos = Order.pos . toOrder
@@ -256,42 +256,26 @@ lookup k (Order m _) = EnumMap.lookup k m
 lookupPair :: (Eq k, Enum k) => Int -> Order k a  -> Maybe (k, a)
 lookupPair i o = lookupKey i o >>= (\k -> fmap (k,) (Data.Order.lookup k o))
 
-splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
-splitAt n = over _1 fromPairs . over _2 fromPairs . LL.splitAt n . toPairs
-
--- Does not check whether k is present
-insertAtUnsafe :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
-insertAtUnsafe n (k, a) o = uncurry (<>) . over _2 (prependUnsafe (k, a)) . splitAt n $ o
-
 insertAt :: (Enum k, Ord k) => Int -> a -> Order k a -> (Order k a, k)
-insertAt n a o = let k = next o in (insertAtUnsafe n (k, a) o, k)
+insertAt n a o = let k = next o in (insertPairAt n (k, a) o, k)
 
-drop :: (Eq k, Enum k) => Int -> Order k a -> Order k a
-drop n (Order m v) =
-  let (a, b) = LL.splitAt n v in
-  Order (Foldable.foldr EnumMap.delete m a) b
-
-take :: (Eq k, Enum k) => Int -> Order k a -> Order k a
-take n (Order m v) =
-  let (a, b) = LL.splitAt n v in
-  Order (Foldable.foldr EnumMap.delete m b) a
+insertPairAt :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
+insertPairAt n (k, a) o = uncurry (<>) $ over _2 (LL.singleton (k, a) <>) $ LL.splitAt n o
 
 deleteAt :: (Enum k, Ord k) => Int -> Order k a -> Order k a
-deleteAt n = uncurry (<>) . over _2 (Data.Order.drop 1) . splitAt n
+deleteAt n = uncurry (<>) . over _2 (LL.drop 1) . LL.splitAt n
 
--- Does not check whether k is present
-appendUnsafe :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
-appendUnsafe (k, a) m = Data.Order.insertAtUnsafe (length m) (k, a) m
+appendPair :: (Enum k, Ord k) => Order k a -> (k, a) -> Order k a
+appendPair m (k, a) = m <> LL.singleton (k, a)
 
-append :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
-append a m = let k = next m in (Data.Order.appendUnsafe (k, a) m, k)
+appendElem :: (Enum k, Ord k) => Order k a -> a -> (Order k a, k)
+appendElem o a = let k = next o in (appendPair o (k, a), k)
 
--- Does not check whether k is present
-prependUnsafe :: (Eq k, Enum k) => (k, a) -> Order k a -> Order k a
-prependUnsafe (k, a) (Order m v) = Order (EnumMap.insert k a m) (LL.singleton k <> v)
+prependPair :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
+prependPair (k, a) o = LL.singleton (k, a) <> o
 
-prepend :: (Eq k, Enum k) => a -> Order k a -> (Order k a, k)
-prepend a o = let k = next o in (prependUnsafe (k, a) o, k)
+prependElem :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
+prependElem a o = let k = next o in (prependPair (k, a) o, k)
 
 -- | Return the keys in order.
 keys :: Order k a -> UList k
@@ -400,6 +384,19 @@ instance (Ord k, Enum k, LL.FoldableLL (Order k v) (k, v)) => LL.ListLike (Order
           Just (LL.head (EnumMap.toList mk), Order mks ks)
       Nothing -> Nothing
 
+  drop :: Int -> Order k a -> Order k a
+  drop n (Order m v) =
+    let (a, b) = LL.splitAt n v in
+    Order (Foldable.foldr EnumMap.delete m a) b
+
+  take :: Int -> Order k a -> Order k a
+  take n (Order m v) =
+    let (a, b) = LL.splitAt n v in
+    Order (Foldable.foldr EnumMap.delete m b) a
+
+  splitAt :: Int -> Order k a -> (Order k a, Order k a)
+  splitAt n = over _1 fromPairs . over _2 fromPairs . LL.splitAt n . toPairs
+
 instance (Enum k, Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
     foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _map xs ! k)) r0 (_vec xs)
     foldr f r0 xs = Foldable.foldr (\k r -> f (k, _map xs ! k) r) r0 (_vec xs)
@@ -453,24 +450,24 @@ instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition
 prop_lookupKey :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupKey (InsertPosition o i) a =
     lookupKey i o' == Just k && lookupKey (length o) o == Nothing
-    where o' = insertAtUnsafe i (k, a) o
+    where o' = insertPairAt i (k, a) o
           k = next o
 
 prop_lookup :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookup (InsertPosition o i) a =
     lookup k o' == Just a && lookup k o == Nothing
-    where o' = insertAtUnsafe i (k, a) o
+    where o' = insertPairAt i (k, a) o
           k = next o
 
 prop_lookupPair :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupPair (InsertPosition o i) a =
     lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
-    where o' = insertAtUnsafe i (k, a) o
+    where o' = insertPairAt i (k, a) o
           k = next o
 
 prop_splitAt :: (k ~ Char, a ~ String) => ElementPosition k a -> Bool
 prop_splitAt (ElementPosition o i) =
-    let (a, b) = splitAt (maybe 0 id i) o in
+    let (a, b) = LL.splitAt (maybe 0 id i) o in
     o == a <> b
 
 prop_keys :: Order Char String -> Bool
