@@ -207,13 +207,13 @@ mapEither = IntMap.mapEither
 mapEitherWithKey :: Enum k => (k -> a -> Either b c) -> EnumMap k a -> (EnumMap k b, IntMap c)
 mapEitherWithKey f m = IntMap.mapEitherWithKey (\k a -> f (toEnum k) a) m
 
-mapKeys :: Enum k => (k -> k) -> EnumMap k a -> EnumMap k a
+mapKeys :: (Enum k1, Enum k2) => (k1 -> k2) -> EnumMap k1 a -> EnumMap k2 a
 mapKeys f m = IntMap.mapKeys (fromEnum . f . toEnum) m
 
-mapKeysMonotonic :: Enum k => (k -> k) -> EnumMap k a -> EnumMap k a
+mapKeysMonotonic :: (Enum k1, Enum k2) => (k1 -> k2) -> EnumMap k1 a -> EnumMap k2 a
 mapKeysMonotonic f m = IntMap.mapKeysMonotonic (fromEnum . f . toEnum) m
 
-mapKeysWith :: Enum k => (a -> a -> a) -> (k -> k) -> EnumMap k a -> EnumMap k a
+mapKeysWith :: (Enum k1, Enum k2) => (a -> a -> a) -> (k1 -> k2) -> EnumMap k1 a -> EnumMap k2 a
 mapKeysWith f g m = IntMap.mapKeysWith f (fromEnum . g . toEnum) m
 
 mapMaybe :: (a -> Maybe b) -> EnumMap k a -> EnumMap k b

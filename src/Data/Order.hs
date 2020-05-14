@@ -30,7 +30,7 @@ module Data.Order
     , fromPairs
     -- * Operators
     , keys, values, pos, Data.Order.lookup, ilookup, view
-    , Data.Order.next, mapKeys
+    , Data.Order.next, Data.Order.mapKeys
     , Data.Order.member, permute, permuteUnsafe
     -- * Positional operations
     , lookupKey, lookupPair
@@ -64,7 +64,7 @@ import Data.Foldable as Foldable hiding (toList)
 import Data.ListLike (break, singleton)
 import qualified Data.ListLike as LL
 --import Data.ListLike as LL (filter, ListLike, FoldableLL, fromListLike, nub, sort, zip)
-import Data.EnumMap as EnumMap ((!), EnumMap, mapWithKey, member)
+import Data.EnumMap as EnumMap ((!), EnumMap, mapKeys, mapWithKey, member)
 import qualified Data.EnumMap as EnumMap
 import Data.List as List (nub)
 import Data.Map (Map)
@@ -294,8 +294,8 @@ values x = fmap (\k -> _map x ! k) (toList (keys x))
 
 -- | Based on Data.Map.mapKeys, because UList is not a functor we
 -- need to eliminate pairs when two k1 are mapped to the same k2.
-mapKeys :: Eq k2 => (k1 -> k2) -> Order k1 a -> Order k2 a
-mapKeys f (Order m ks) = Order m (umap f ks)
+mapKeys :: (Enum k1, Enum k2, Eq k2) => (k1 -> k2) -> Order k1 a -> Order k2 a
+mapKeys f (Order m ks) = Order (EnumMap.mapKeys f m) (umap f ks)
 
 ilookup :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a)
 ilookup k (Order m v) =
@@ -379,9 +379,9 @@ instance (Ord k, Enum k, LL.FoldableLL (Order k v) (k, v)) => LL.ListLike (Order
   uncons :: Order k v -> Maybe ((k, v), Order k v)
   uncons (Order mp ks) =
     case LL.uncons ks of
-      Just (k0, _ks) ->
+      Just (k0, ks') ->
         let (mk, mks) = EnumMap.partitionWithKey (\k _ -> k == k0) mp in
-          Just (LL.head (EnumMap.toList mk), Order mks ks)
+          Just (LL.head (EnumMap.toList @k mk), Order mks ks')
       Nothing -> Nothing
 
   drop :: Int -> Order k a -> Order k a

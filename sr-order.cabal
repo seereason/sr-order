@@ -17,6 +17,11 @@ description:
   elements.
 
 library
+  default-language: Haskell2010
+  Default-Extensions: ConstraintKinds, CPP, DataKinds, DeriveDataTypeable, DeriveFunctor, DeriveGeneric
+  Default-Extensions: FlexibleInstances, FlexibleContexts, LambdaCase, MultiParamTypeClasses, OverloadedStrings
+  Default-Extensions: RankNTypes, RecordWildCards, ScopedTypeVariables, StandaloneDeriving, TupleSections
+  Default-Extensions: TypeApplications, TypeFamilies, TypeOperators
   hs-source-dirs: src
   ghc-options: -Wall -O
   build-depends:
@@ -31,10 +36,10 @@ library
     safecopy,
     vector
   exposed-modules:
+    Data.AssocList
     Data.EnumMap
     Data.Order
     Data.UList
-  default-language: Haskell2010
 
   if !impl(ghcjs)
     Build-Depends:
