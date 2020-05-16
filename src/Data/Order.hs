@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE RankNTypes #-}
@@ -14,6 +15,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS -Wall #-}
@@ -38,30 +40,22 @@ module Data.Order
     , deleteAt
     , appendPair, appendElem
     , prependPair, prependElem
-    -- * Allocate new keys
-#if !__GHCJS__
-    -- * QuickCheck property
-    , tests
-    , prop_next
-    , prop_keys
-    , prop_fromPairs
-    , prop_lookup
-    , prop_lookupKey
-    , prop_lookupPair
-    , prop_splitAt
-#endif
     -- * Is/Has classes and instances
     , IsMap(..)
     , HasMap(..)
     , IsOrder(..)
     , HasOrder(..)
+
+    , tests
     ) where
 
-import Control.Lens hiding (view)
+import Control.Exception (Exception, throw, try)
+import Control.Lens hiding (uncons, view)
+import Data.Bool (bool)
 import Data.Data (Data)
 import qualified Data.Foldable as Foldable
 import Data.Foldable as Foldable hiding (toList)
-import Data.ListLike (break, singleton)
+import Data.ListLike (break, singleton, uncons)
 import qualified Data.ListLike as LL
 --import Data.ListLike as LL (filter, ListLike, FoldableLL, fromListLike, nub, sort, zip)
 import Data.EnumMap as EnumMap ((!), EnumMap, mapKeys, mapWithKey, member)
@@ -83,12 +77,10 @@ import GHC.Generics (Generic)
 -- import qualified Data.Vector as Vector
 import Prelude hiding (break, foldMap, length, lookup, map, splitAt, zip)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
-#if !__GHCJS__
 import Data.EnumMap as EnumMap (keysSet)
 import Data.Maybe (isNothing)
 import qualified Data.Set as Set (fromList)
-import Test.QuickCheck (Arbitrary(arbitrary), choose, Gen, quickCheckResult, Result, shuffle, sized, vector, vectorOf)
-#endif
+import Test.QuickCheck
 
 data Order k v =
   Order
@@ -212,7 +204,7 @@ instance                    HasMap  (Map k v) where toMap = id
 -- We can't write instances for [(k, v)] due to existing Ixed [a]
 -- instance.  We could create a wrapper, there's some work to convert
 -- integer index to key.
-#if 0
+{-
 newtype AList k v = AList {unAList :: [(k, v)]}
 instance At (AList k v) where at k = lens unAList AList . (maybe _Nothing at (findIndex undefined :: Lens' [(k, v)] (Maybe v))  {-lens AList unAList . (at k :: Lens [(k, v)] (Maybe (k, v)))-}
 instance Ixed (AList k v) where ix k = lens AList unAList . ix k
@@ -222,7 +214,7 @@ instance (Ord k, Enum k) => IsMap (AList k v) where fromMap = AList . Map.toList
 instance (Ord k, Enum k) => HasMap (AList k v) where toMap = Map.fromList . unAList
 instance (Ord k, Enum k) => IsOrder (AList k v) where fromOrder = AList . GHC.Exts.toList . toPairs
 instance (Ord k, Enum k) => HasOrder (AList k v) where toOrder = fromPairs . unAList
-#endif
+-}
 
 fromPairs :: forall t k a. (Eq k, Enum k, Foldable t) => t (k, a) -> Order k a
 fromPairs pairs =
@@ -434,7 +426,6 @@ permute neworder (Order m v) =
       (a, _) | LL.nub a /= a -> Left "duplicate keys"
       _ -> Right (Order m neworder)
 
-#if !__GHCJS__
 instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
@@ -446,6 +437,13 @@ instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition
       case length o of
         0 -> return $ ElementPosition o Nothing
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
+
+instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
+  arbitrary = do
+      (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
+      let ks' = nub ks
+      (vs :: [v]) <- vector (LL.length ks')
+      return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
 
 prop_lookupKey :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupKey (InsertPosition o i) a =
@@ -476,20 +474,80 @@ prop_keys (Order m v) = EnumMap.keysSet m == Set.fromList (Foldable.toList v)
 prop_next :: Order Char String -> Bool
 prop_next o = isNothing (LL.elemIndex (next o) (keys o))
 
-instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
-  arbitrary = do
-      (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
-      let ks' = nub ks
-      (vs :: [v]) <- vector (LL.length ks')
-      return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
+prop_uncons :: Order Char Int -> Bool
+prop_uncons o =
+   o == maybe mempty (\(pair, o') -> singleton pair <> o') (uncons o)
+
+prop_null :: Order Char Int -> Bool
+prop_null o = null o == isNothing (uncons o)
+
+prop_singleton :: (Char, Int) -> Bool
+prop_singleton pair = uncons (singleton pair) == Just (pair, mempty :: Order Char Int)
+
+-- | Map and list should contain the same keys with no duplicates
+prop_toPairs_fromPairs :: Order Int String -> Bool
+prop_toPairs_fromPairs o =
+    fromList (toList o :: [(Int, String)]) == o
+
+prop_delete :: Order Int String -> Property
+prop_delete o | length o == 0 = property True
+prop_delete o =
+    forAll (choose (0, length o - 1)) $ \i ->
+    length (deleteAt i o) == length o - 1
+
+prop_insertAt :: (Int, String) -> Order Int String -> Property
+prop_insertAt v@(k, _) o =
+    forAll (choose (0, length o)) $ \i ->
+    Data.Order.member k o || (length (insertPairAt i v o) == length o + 1)
+
+-- | Use an explicit generator to create a valid list position.
+prop_insert_delete :: (Int, String) -> Order Int String -> Property
+prop_insert_delete (k, a) o =
+    forAll (choose (0, length o)) $ \i ->
+        Data.Order.member k o || (view k (insertPairAt i (k, a) o) == Just (i, a, o))
+
+prop_insert_delete_pos :: (Int, String) -> Order Int String -> Property
+prop_insert_delete_pos v@(k, _) o =
+    forAll (choose (0, length o)) $ \i ->
+        Data.Order.member k o || (deleteAt i (insertPairAt i v o) == o)
+
+instance Exception Result
+
+quickCheckError :: Testable prop => prop -> IO Result
+quickCheckError prop = do
+  result <- quickCheckResult prop
+  bool (throw result) (return result) (isSuccess result)
+
+instance Semigroup Result where
+  (Success numTests1 numDiscarded1 labels1 classes1 tables1 output1) <> (Success numTests2 numDiscarded2 labels2 classes2 tables2 output2) =
+    Success (numTests1 + numTests2) (numDiscarded1 + numDiscarded2) (labels1 <> labels2) (classes1 <> classes2) (tables1 <> tables2) (output1 <> output2)
+  (Success _ _ _ _ _ _) <> failure = failure
+  failure <> _ = failure
+
+instance Monoid Result where
+  mempty = Success 0 0 mempty mempty mempty mempty
+  mappend = (<>)
+
+throwResult :: Result -> IO Result
+throwResult = \case result@(Success {}) -> return result
+                    result -> throw result
 
 tests :: IO Result
 tests = do
-  msum ([ quickCheckResult prop_next
-        , quickCheckResult prop_keys
-        , quickCheckResult prop_fromPairs
-        , quickCheckResult prop_lookup
-        , quickCheckResult prop_lookupKey
-        , quickCheckResult prop_lookupPair
-        , quickCheckResult prop_splitAt ] :: [IO Result])
-#endif
+  mconcat <$> sequence
+    [quickCheckResult prop_next,
+     quickCheckResult prop_keys,
+     quickCheckResult prop_next,
+     quickCheckResult prop_lookup,
+     quickCheckResult prop_lookupKey,
+     quickCheckResult prop_lookupPair,
+     quickCheckResult prop_splitAt,
+     quickCheckResult prop_uncons,
+     quickCheckResult prop_null,
+     quickCheckResult prop_singleton,
+     quickCheckResult prop_toPairs_fromPairs,
+     quickCheckResult prop_delete,
+     quickCheckResult prop_insertAt,
+     quickCheckResult prop_insert_delete,
+     quickCheckResult prop_insert_delete_pos
+    ] >>= throwResult
