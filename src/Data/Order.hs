@@ -72,6 +72,7 @@ import Data.Serialize (Serialize(..))
 import qualified Data.Semigroup as Sem
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.UList (UList, umap)
+import Extra.QuickCheck
 import GHC.Exts
 import GHC.Generics (Generic)
 -- import qualified Data.Vector as Vector
@@ -510,27 +511,6 @@ prop_insert_delete_pos :: (Int, String) -> Order Int String -> Property
 prop_insert_delete_pos v@(k, _) o =
     forAll (choose (0, length o)) $ \i ->
         Data.Order.member k o || (deleteAt i (insertPairAt i v o) == o)
-
-instance Exception Result
-
-quickCheckError :: Testable prop => prop -> IO Result
-quickCheckError prop = do
-  result <- quickCheckResult prop
-  bool (throw result) (return result) (isSuccess result)
-
-instance Semigroup Result where
-  (Success numTests1 numDiscarded1 labels1 classes1 tables1 output1) <> (Success numTests2 numDiscarded2 labels2 classes2 tables2 output2) =
-    Success (numTests1 + numTests2) (numDiscarded1 + numDiscarded2) (labels1 <> labels2) (classes1 <> classes2) (tables1 <> tables2) (output1 <> output2)
-  (Success _ _ _ _ _ _) <> failure = failure
-  failure <> _ = failure
-
-instance Monoid Result where
-  mempty = Success 0 0 mempty mempty mempty mempty
-  mappend = (<>)
-
-throwResult :: Result -> IO Result
-throwResult = \case result@(Success {}) -> return result
-                    result -> throw result
 
 tests :: IO Result
 tests = do
