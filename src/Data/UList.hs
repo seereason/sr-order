@@ -22,7 +22,7 @@ instance (SafeCopy a, Typeable a) => SafeCopy (UList a)
 
 instance Eq a => IsList (UList a) where
   type Item (UList a) = a
-  fromList = UList . nub
+  fromList = UList {-. nub-}
   toList = unUList
 
 instance Eq a => Semigroup (UList a) where
