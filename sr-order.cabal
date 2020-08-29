@@ -41,6 +41,7 @@ library
     Data.AssocList
     Data.EnumMap
     Data.Order
+    Data.Order.Type
     Data.UList
 
 test-suite order-tests

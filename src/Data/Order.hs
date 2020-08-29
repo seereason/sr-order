@@ -26,7 +26,7 @@
 -- ListLike instance that treats it as a sequence of (k, a) pairs.
 
 module Data.Order
-    ( Order(Order, _map, _vec)
+    ( Order(_map, _vec)
     , toPairList
     -- * Builder
     , fromPairs
@@ -49,55 +49,30 @@ module Data.Order
     , tests
     ) where
 
-import Control.Exception (Exception, throw, try)
 import Control.Lens hiding (uncons, view)
-import Data.Bool (bool)
-import Data.Data (Data)
 import qualified Data.Foldable as Foldable
 import Data.Foldable as Foldable hiding (toList)
 import Data.ListLike (break, singleton, uncons)
 import qualified Data.ListLike as LL
---import Data.ListLike as LL (filter, ListLike, FoldableLL, fromListLike, nub, sort, zip)
-import Data.EnumMap as EnumMap ((!), EnumMap, mapKeys, mapWithKey, member)
+import Data.EnumMap as EnumMap ((!), keysSet, mapKeys, mapWithKey, member)
 import qualified Data.EnumMap as EnumMap
 import Data.List as List (nub)
 import Data.Map (Map)
 import qualified Data.Map as Map (fromList{-, toList-})
+import Data.Maybe (isNothing)
 import Data.Monoid
-import Data.SafeCopy (base, contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
-import qualified Data.Sequence as Seq
+import Data.Order.Type (Order(..), unsafeOrder)
+import Data.SafeCopy (SafeCopy(..), safeGet, safePut)
 import Data.Serialize (Serialize(..))
---import qualified Data.Set as Set
---import Data.IntSet as Set (maxView)
 import qualified Data.Semigroup as Sem
+import qualified Data.Set as Set (fromList)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.UList (UList, umap)
 import Extra.QuickCheck
 import GHC.Exts
-import GHC.Generics (Generic)
--- import qualified Data.Vector as Vector
 import Prelude hiding (break, foldMap, length, lookup, map, splitAt, zip)
-import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
-import Data.EnumMap as EnumMap (keysSet)
-import Data.Maybe (isNothing)
-import qualified Data.Set as Set (fromList)
 import Test.QuickCheck
-
-data Order k v =
-  Order
-    { _map :: EnumMap k v
-    , _vec :: UList k
-    } deriving (Generic, Data, Typeable, Functor, Read)
-
-instance (Eq k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Migrate (Order k v) where
-  type MigrateFrom (Order k v) = Order_1 k v
-  migrate (Order_1 mp ks) = Order mp (LL.fromListLike ks)
-
-data Order_1 k v =
-  Order_1
-    { _map_1 :: EnumMap k v
-    , _vec_1 :: Seq.Seq k
-    } deriving (Generic, Data, Typeable, Functor, Read)
+import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 
 instance (Ord k, Enum k) => IsList (Order k v) where
   type Item (Order k v) = (k, v)
@@ -108,21 +83,6 @@ instance SafeCopy (Order k v) => Serialize (Order k v) where
     put = safePut
     get = safeGet
 
--- Don't change this, its not compatible with the generic instance.
-instance (SafeCopy k, Typeable k, SafeCopy a, Typeable a) => SafeCopy (Order_1 k a) where
-    putCopy (Order_1 m v) =
-        contain $ do safePut m
-                     safePut v
-    getCopy =
-        contain $ do m <- safeGet
-                     v <- safeGet
-                     return $ Order_1 m v
-    version = 1
-    kind = base
-    errorTypeName _ = "Order"
-
-instance (Eq k, Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => SafeCopy (Order k v) where version = 2; kind = extension
-
 instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
   show o = "fromPairs " ++ show (toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
 
@@ -130,7 +90,7 @@ instance forall k v. (Ord k, Enum k, Pretty k, Pretty v, Typeable k, Typeable v)
   pPrint o = text "Order " <> pPrint (toList o)
 
 instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
-    (<>) a b = Order (mappend (_map a) (_map b)) (_vec a <> _vec b)
+    (<>) a b = unsafeOrder (mappend (_map a) (_map b)) (_vec a <> _vec b)
     -- ^ If there are any common @k@ values in the shared
     -- map the elements from the second is omitted.  For
     -- this reason it is suggested that, when in doubt,
@@ -140,7 +100,7 @@ instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
     -- @@
 
 instance (Enum k, Ord k) => Monoid (Order k v) where
-    mempty = Order mempty mempty
+    mempty = unsafeOrder mempty mempty
 #if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
 #endif
@@ -151,7 +111,7 @@ instance (Enum k, Ord k) => Monoid (Order k v) where
 -- "ab"
 -- @@
 instance (Enum k, Ord k) => Foldable (Order k) where
-    foldMap f (Order m v) = foldMap (\k -> f (m ! k)) v
+    foldMap f o = foldMap (\k -> f (_map o ! k)) (_vec o)
 
 -- Fold over keys and values
 -- @@
@@ -159,14 +119,14 @@ instance (Enum k, Ord k) => Foldable (Order k) where
 -- "2a5b"
 -- @@
 instance (Enum k, Ord k) => FoldableWithIndex k (Order k) where
-    ifoldMap f (Order m v) = foldMap (\k -> f k (m ! k)) v
+    ifoldMap f o = foldMap (\k -> f k (_map o ! k)) (_vec o)
 
 -- @@
 -- λ> ifoldMap (\k v-> LL.concat (LL.replicate k v :: [String])) (fromPairs (LL.fromList [(2, "a"), (5, "b")]))
 -- "aabbbbb"
 -- @@
 instance Enum k => FunctorWithIndex k (Order k) where
-    imap f (Order m v) = Order (EnumMap.mapWithKey f m) v
+    imap f o = unsafeOrder (EnumMap.mapWithKey f (_map o)) (_vec o)
 
 -- | Can be fully constructed from a Map
 class (Ixed o, Eq (Index o)) => IsMap o where
@@ -219,14 +179,15 @@ instance (Ord k, Enum k) => HasOrder (AList k v) where toOrder = fromPairs . unA
 
 fromPairs :: forall t k a. (Eq k, Enum k, Foldable t) => t (k, a) -> Order k a
 fromPairs pairs =
-    Order (fromList (fmap (over _1 fromEnum) pairs'))
-          (fromList (fmap fst pairs'))
+    unsafeOrder
+      (fromList (fmap (over _1 fromEnum) pairs'))
+      (fromList (fmap fst pairs'))
     where
       pairs' :: [(k, a)]
       pairs' = Foldable.toList pairs
 
 toPairs' :: (Eq k, Enum k) => Order k a -> [(k, a)]
-toPairs' (Order m v) = fmap (\k -> (k, m ! k)) (toList v)
+toPairs' o = fmap (\k -> (k, _map o ! k)) (toList (_vec o))
 
 prop_fromPairs :: Order Char String -> Bool
 prop_fromPairs o = fromPairs (toPairs o) == o
@@ -243,7 +204,7 @@ data ElementPosition k v = ElementPosition (Order k v) (Maybe Int) deriving Show
 
 -- | Like Map.lookup.
 lookup :: (Enum k) => k -> Order k a -> Maybe a
-lookup k (Order m _) = EnumMap.lookup k m
+lookup k o = EnumMap.lookup k (_map o)
 
 -- | Lookup pair by position
 lookupPair :: (Eq k, Enum k) => Int -> Order k a  -> Maybe (k, a)
@@ -276,8 +237,8 @@ keys = _vec
 
 -- | Return the position of a key, Nothing if absent.
 pos :: Eq k => k -> Order k a -> Maybe Int
-pos k (Order _ v) =
-    case LL.break (== k) v of
+pos k o =
+    case LL.break (== k) (_vec o) of
       (_, x) | LL.null x -> Nothing
       (x, _) -> Just (LL.length x)
 
@@ -288,20 +249,20 @@ values x = fmap (\k -> _map x ! k) (toList (keys x))
 -- | Based on Data.Map.mapKeys, because UList is not a functor we
 -- need to eliminate pairs when two k1 are mapped to the same k2.
 mapKeys :: (Enum k1, Enum k2, Eq k2) => (k1 -> k2) -> Order k1 a -> Order k2 a
-mapKeys f (Order m ks) = Order (EnumMap.mapKeys f m) (umap f ks)
+mapKeys f o = unsafeOrder (EnumMap.mapKeys f (_map o)) (umap f (_vec o))
 
 ilookup :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a)
-ilookup k (Order m v) =
-    case EnumMap.lookup k m of
+ilookup k o =
+    case EnumMap.lookup k (_map o) of
       Nothing -> Nothing
-      Just a -> Just (length (fst (break (== k) v)), a)
+      Just a -> Just (length (fst (break (== k) (_vec o))), a)
 
 -- | Like 'Data.Set.minView', if k is present returns the position,
 -- associated value, and the order with that value removed.
 view :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a, Order k a)
-view k o@(Order m v) =
+view k o =
   case ilookup k o of
-    Just (i, a) -> Just (i, a, Order (EnumMap.delete k m) (LL.filter (/= k) v))
+    Just (i, a) -> Just (i, a, unsafeOrder (EnumMap.delete k (_map o)) (LL.filter (/= k) (_vec o)))
     Nothing -> Nothing
 
 member :: (Enum k) => k -> Order k v -> Bool
@@ -318,10 +279,10 @@ instance (Enum k, Ord k, Eq v, Ord v) => Ord (Order k v) where
 -- [fromList [('a','1'),('b','2')], fromList [('a','1'),('b','!')],fromList [('a','!'),('b','2')],fromList [('a','!'),('b','!')]] :: [Order Char Char]
 -- @@
 instance (Enum k, Ord k) => Traversable (Order k) where
-    traverse f (Order m v) = Order <$> traverse f m <*> pure v
+    traverse f o = unsafeOrder <$> traverse f (_map o) <*> pure (_vec o)
 
 instance (Enum k, Ord k) => TraversableWithIndex k (Order k) where
-    itraverse f (Order m v) = Order <$> itraverse (\k a -> f (toEnum k) a) m <*> pure v
+    itraverse f o = unsafeOrder <$> itraverse (\k a -> f (toEnum k) a) (_map o) <*> pure (_vec o)
 
 -- | An Order has two notions of an 'Index', the 'Int' index of the
 -- list and the @k@ index of the map.  Here is the 'Ixed' instance
@@ -334,9 +295,9 @@ instance (Enum k, Ord k) => TraversableWithIndex k (Order k) where
 type instance Index (Order k a) = k
 type instance IxValue (Order k a) = a
 instance Enum k => Ixed (Order k a) where
-    ix k f o@(Order mp sq) =
-        case EnumMap.lookup k mp of
-          Just a -> fmap (\a' -> Order (EnumMap.insert k a' mp) sq) (f a)
+    ix k f o =
+        case EnumMap.lookup k (_map o) of
+          Just a -> fmap (\a' -> unsafeOrder (EnumMap.insert k a' (_map o)) (_vec o)) (f a)
           Nothing -> pure o
 
 -- | 'At' instance.
@@ -353,39 +314,39 @@ instance Enum k => Ixed (Order k a) where
 -- fromPairs [('a',10),('b',20),('x',30)] :: Order (Char) (Integer)
 -- @@
 instance (Enum k, Eq k) => At (Order k a) where
-    at k f o@(Order mp sq) =
-        case EnumMap.lookup k mp of
+    at k f o =
+        case EnumMap.lookup k (_map o) of
           Just a ->
-              fmap (maybe (Order (EnumMap.delete k mp) (LL.filter (/= k) sq))
-                          (\a' -> Order (EnumMap.insert k a' mp) sq))
+              fmap (maybe (unsafeOrder (EnumMap.delete k (_map o)) (LL.filter (/= k) (_vec o)))
+                          (\a' -> unsafeOrder (EnumMap.insert k a' (_map o)) (_vec o)))
                    (f (Just a))
           Nothing ->
               fmap (maybe o
-                          (\a' -> Order (EnumMap.insert k a' mp) (sq <> singleton k)))
+                          (\a' -> unsafeOrder (EnumMap.insert k a' (_map o)) (_vec o <> singleton k)))
                    (f Nothing)
 
 instance (Ord k, Enum k, LL.FoldableLL (Order k v) (k, v)) => LL.ListLike (Order k v) (k, v) where
   singleton :: (k, v) -> Order k v
-  singleton (k, v) = Order (EnumMap.singleton k v) [k]
+  singleton (k, v) = unsafeOrder (EnumMap.singleton k v) [k]
   null :: Order k v -> Bool
-  null (Order _ ks) = LL.null ks
+  null o = LL.null (_vec o)
   uncons :: Order k v -> Maybe ((k, v), Order k v)
-  uncons (Order mp ks) =
-    case LL.uncons ks of
+  uncons o =
+    case LL.uncons (_vec o) of
       Just (k0, ks') ->
-        let (mk, mks) = EnumMap.partitionWithKey (\k _ -> k == k0) mp in
-          Just (LL.head (EnumMap.toList @k mk), Order mks ks')
+        let (mk, mks) = EnumMap.partitionWithKey (\k _ -> k == k0) (_map o) in
+          Just (LL.head (EnumMap.toList @k mk), unsafeOrder mks ks')
       Nothing -> Nothing
 
   drop :: Int -> Order k a -> Order k a
-  drop n (Order m v) =
-    let (a, b) = LL.splitAt n v in
-    Order (Foldable.foldr EnumMap.delete m a) b
+  drop n o =
+    let (a, b) = LL.splitAt n (_vec o) in
+    unsafeOrder (Foldable.foldr EnumMap.delete (_map o) a) b
 
   take :: Int -> Order k a -> Order k a
-  take n (Order m v) =
-    let (a, b) = LL.splitAt n v in
-    Order (Foldable.foldr EnumMap.delete m b) a
+  take n o =
+    let (a, b) = LL.splitAt n (_vec o) in
+    unsafeOrder (Foldable.foldr EnumMap.delete (_map o) b) a
 
   splitAt :: Int -> Order k a -> (Order k a, Order k a)
   splitAt n = over _1 fromPairs . over _2 fromPairs . LL.splitAt n . toPairs
@@ -402,30 +363,30 @@ instance (Enum k, Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v)
 -- 0
 -- @@
 next :: Enum k => Order k a -> k
-next (Order m _) = head (dropWhile (`EnumMap.member` m) [toEnum 0 ..])
+next o = head (dropWhile (`EnumMap.member` (_map o)) [toEnum 0 ..])
 -- next (Order m _) = maybe (toEnum 0) (succ . toEnum . fst) (Set.maxView (EnumMap.keysSet m))
 
 -- | Replace the current ordering with the given key list.  Duplicate
 -- keys are ignored, missing keys are appended.
 permuteUnsafe :: forall k v. (Enum k, Ord k) => UList k -> Order k v -> Order k v
-permuteUnsafe neworder (Order m _v) =
-    Order m (present <> missing)
+permuteUnsafe neworder o =
+    unsafeOrder (_map o) (present <> missing)
     where
       -- Remove unknown keys
       present :: UList k
-      present = fromList (List.nub (toList (LL.filter (`EnumMap.member` m) neworder)))
+      present = fromList (List.nub (toList (LL.filter (`EnumMap.member` _map o) neworder)))
       -- Collect the values that are missing from the new key order
       missing :: UList k
-      missing = fromList (EnumMap.keys (foldr EnumMap.delete m present))
+      missing = fromList (EnumMap.keys (foldr EnumMap.delete (_map o) present))
 
 -- | A permute function that verifies neworder is a valid permutation.
 permute :: forall k v. (Enum k, Ord k) => UList k -> Order k v -> Either String (Order k v)
-permute neworder (Order m v) =
-    case LL.partition (`EnumMap.member` m) neworder of
+permute neworder o =
+    case LL.partition (`EnumMap.member` _map o) neworder of
       (_, b) | length b /= 0 -> Left "invalid keys"
-      (a, _) | length a < length v -> Left "missing keys"
+      (a, _) | length a < length (_vec o) -> Left "missing keys"
       (a, _) | LL.nub a /= a -> Left "duplicate keys"
-      _ -> Right (Order m neworder)
+      _ -> Right (unsafeOrder (_map o) neworder)
 
 instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
   arbitrary = do
@@ -470,7 +431,7 @@ prop_splitAt (ElementPosition o i) =
     o == a <> b
 
 prop_keys :: Order Char String -> Bool
-prop_keys (Order m v) = EnumMap.keysSet m == Set.fromList (Foldable.toList v)
+prop_keys o = EnumMap.keysSet (_map o) == Set.fromList (Foldable.toList (_vec o))
 
 prop_next :: Order Char String -> Bool
 prop_next o = isNothing (LL.elemIndex (next o) (keys o))
@@ -529,5 +490,6 @@ tests = do
      quickCheckResult prop_delete,
      quickCheckResult prop_insertAt,
      quickCheckResult prop_insert_delete,
-     quickCheckResult prop_insert_delete_pos
+     quickCheckResult prop_insert_delete_pos,
+     quickCheckResult prop_fromPairs
     ] >>= throwResult
