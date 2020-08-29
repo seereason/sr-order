@@ -1,18 +1,23 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, InstanceSigs, UndecidableInstances #-}
 
 module Data.Order.Type
   ( Order(_map, _vec)
   , unsafeOrder
   , toPairList
   , toPairs
-  , fromPairs
+  , fromPairsUnsafe
+  , fromPairsSafe
   , overPairs
   , ioverPairs
+  , next
   ) where
 
+import Control.Lens (_1, _2, over)
 import Data.Data (Data)
 import Data.EnumMap as EnumMap ((!), EnumMap)
 import qualified Data.EnumMap as EnumMap
+import Data.Foldable as Foldable (Foldable(foldl, foldr))
+import Data.ListLike as ListLike (ListLike(..))
 import qualified Data.ListLike as LL
 import Data.SafeCopy (base, contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
@@ -21,6 +26,7 @@ import Data.Typeable (Typeable)
 import Data.UList
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector
+import GHC.Exts as GHC (IsList(..))
 import GHC.Generics (Generic)
 
 data Order k v =
@@ -97,45 +103,34 @@ toPairList = Vector.toList . toPairs
 toPairs :: forall k a. Enum k => Order k a -> Vector (k, a)
 toPairs o = fmap (\k -> (k, _map o ! k)) (_vec o :: Vector k)
 
+fromPairsSafe :: forall t k a. (Ord k, Enum k, Foldable t) => t (k, a) -> Order k a
+fromPairsSafe pairs =
+  foldr (\(k, a) (Order m v) -> if EnumMap.member k m then Order (EnumMap.insert k a m) (Vector.cons k v) else Order m v) mempty pairs
+
 fromPairs :: forall t k a. (Ord k, Enum k, Foldable t) => t (k, a) -> Order k a
-fromPairs pairs =
+fromPairs = fromPairsSafe
+
+fromPairsUnsafe :: forall t k a. (Ord k, Enum k, Foldable t) => t (k, a) -> Order k a
+fromPairsUnsafe pairs =
   foldr (\(k, a) (Order m v) -> Order (EnumMap.insert k a m) (Vector.cons k v)) mempty pairs
 
 overPairs :: (Enum k, Ord k', Enum k') => ((k, v) -> (k', v')) -> Order k v -> Order k' v'
-overPairs f = fromPairs . fmap f . toPairs
+overPairs f = fromPairsUnsafe . fmap f . toPairs
 
 ioverPairs :: (Enum k, Ord k', Enum k') => (Int -> (k, v) -> (k', v')) -> Order k v -> Order k' v'
-ioverPairs f = fromPairs . fmap (uncurry f) . Vector.zipWith (,) (Vector.fromList [0..] :: Vector Int) . toPairs
+ioverPairs f = fromPairsUnsafe . fmap (uncurry f) . Vector.zipWith (,) (Vector.fromList [0..] :: Vector Int) . toPairs
 
-#if 0
-instance (Ord k, Enum k) => GHC.IsList (Order k v) where
-  type Item (Order k v) = (k, v)
-  fromList = fromPairs
-  toList = toPairList
+instance (Enum k, Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
+    foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _map xs ! k)) r0 (_vec xs)
+    foldr f r0 xs = Foldable.foldr (\k r -> f (k, _map xs ! k) r) r0 (_vec xs)
 
-instance (Ord k, Enum k, FoldableLL (Order k v) (k, v)) => ListLike (Order k v) (k, v) where
-  singleton :: (k, v) -> Order k v
-  singleton (k, v) = unsafeOrder (EnumMap.singleton k v) [k]
-  null :: Order k v -> Bool
-  null o = ListLike.null (_vec o)
-  uncons :: Order k v -> Maybe ((k, v), Order k v)
-  uncons o =
-    case ListLike.uncons (_vec o) of
-      Just (k0, ks') ->
-        let (mk, mks) = EnumMap.partitionWithKey (\k _ -> k == k0) (_map o) in
-          Just (ListLike.head (EnumMap.toList @k mk), unsafeOrder mks ks')
-      Nothing -> Nothing
-
-  drop :: Int -> Order k a -> Order k a
-  drop n o =
-    let (a, b) = ListLike.splitAt n (_vec o) in
-    unsafeOrder (Foldable.foldr EnumMap.delete (_map o) a) b
-
-  take :: Int -> Order k a -> Order k a
-  take n o =
-    let (a, b) = ListLike.splitAt n (_vec o) in
-    unsafeOrder (Foldable.foldr EnumMap.delete (_map o) b) a
-
-  splitAt :: Int -> Order k a -> (Order k a, Order k a)
-  splitAt n = over _1 fromPairs . over _2 fromPairs . ListLike.splitAt n . toPairs
-#endif
+-- | Return the next available key
+-- @@
+-- λ> next (fromPairs (Vector.fromList [(2, "a"), (5, "b")]))
+-- 6
+-- λ> next (fromPairs (Data.Vector.fromList []) :: Order Int String)
+-- 0
+-- @@
+next :: Enum k => Order k a -> k
+next o = LL.head (LL.dropWhile (`EnumMap.member` (_map o)) [toEnum 0 ..])
+-- next (Order m _) = maybe (toEnum 0) (succ . toEnum . fst) (Set.maxView (EnumMap.keysSet m))
