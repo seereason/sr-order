@@ -28,6 +28,7 @@
 module Data.Order
     ( Order(_map, _vec)
     , toPairList
+    , toPairs
     -- * Builder
     , fromPairs
     -- * Operators
@@ -41,24 +42,24 @@ module Data.Order
     , appendPair, appendElem
     , prependPair, prependElem
     -- * Is/Has classes and instances
+{-
     , IsMap(..)
     , HasMap(..)
     , IsOrder(..)
     , HasOrder(..)
-
+-}
     , tests
     ) where
 
 import Control.Lens hiding (uncons, view)
 import qualified Data.Foldable as Foldable
-import Data.Foldable as Foldable hiding (toList)
-import Data.ListLike (break, singleton, uncons)
-import qualified Data.ListLike as LL
-import Data.EnumMap as EnumMap ((!), keysSet, mapKeys, mapWithKey, member)
+import Data.ListLike (FoldableLL, ListLike)
+import qualified Data.ListLike as ListLike
+import Data.EnumMap as EnumMap ((!))
 import qualified Data.EnumMap as EnumMap
 import Data.List as List (nub)
-import Data.Map (Map)
-import qualified Data.Map as Map (fromList{-, toList-})
+--import Data.Map (Map)
+--import qualified Data.Map as Map (fromList{-, toList-})
 import Data.Maybe (isNothing)
 import Data.Monoid
 import Data.Order.Type (Order(..), unsafeOrder)
@@ -67,27 +68,28 @@ import Data.Serialize (Serialize(..))
 import qualified Data.Semigroup as Sem
 import qualified Data.Set as Set (fromList)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
-import Data.UList (UList, umap)
+import Data.Vector hiding ((!), break, dropWhile, foldr, fromList, head, length, null, sequence, singleton, toList)
+import qualified Data.Vector as Vector
 import Extra.QuickCheck
-import GHC.Exts
+import qualified GHC.Exts as GHC
 import Prelude hiding (break, foldMap, length, lookup, map, splitAt, zip)
 import Test.QuickCheck
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 
-instance (Ord k, Enum k) => IsList (Order k v) where
+instance (Ord k, Enum k) => GHC.IsList (Order k v) where
   type Item (Order k v) = (k, v)
   fromList = fromPairs
-  toList = GHC.Exts.toList . toPairs
+  toList = toPairList
 
 instance SafeCopy (Order k v) => Serialize (Order k v) where
     put = safePut
     get = safeGet
 
 instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
-  show o = "fromPairs " ++ show (toList o) ++ " :: Order (" ++ show (typeRep (Proxy :: Proxy k)) ++ ") (" ++ show (typeRep (Proxy :: Proxy v)) ++ ")"
+  show o = "fromPairs " <> show (GHC.toList o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
 
 instance forall k v. (Ord k, Enum k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (Order k v) where
-  pPrint o = text "Order " <> pPrint (toList o)
+  pPrint o = text "Order " <> pPrint (GHC.toList o)
 
 instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
     (<>) a b = unsafeOrder (mappend (_map a) (_map b)) (_vec a <> _vec b)
@@ -111,7 +113,7 @@ instance (Enum k, Ord k) => Monoid (Order k v) where
 -- "ab"
 -- @@
 instance (Enum k, Ord k) => Foldable (Order k) where
-    foldMap f o = foldMap (\k -> f (_map o ! k)) (_vec o)
+    foldMap f o = Foldable.foldMap (\k -> f (_map o ! k)) (_vec o)
 
 -- Fold over keys and values
 -- @@
@@ -119,15 +121,16 @@ instance (Enum k, Ord k) => Foldable (Order k) where
 -- "2a5b"
 -- @@
 instance (Enum k, Ord k) => FoldableWithIndex k (Order k) where
-    ifoldMap f o = foldMap (\k -> f k (_map o ! k)) (_vec o)
+    ifoldMap f o = Foldable.foldMap (\k -> f k (_map o ! k)) (_vec o)
 
 -- @@
--- λ> ifoldMap (\k v-> LL.concat (LL.replicate k v :: [String])) (fromPairs (LL.fromList [(2, "a"), (5, "b")]))
+-- λ> ifoldMap (\k v-> ListLike.concat (ListLike.replicate k v :: [String])) (fromPairs (ListLike.fromList [(2, "a"), (5, "b")]))
 -- "aabbbbb"
 -- @@
 instance Enum k => FunctorWithIndex k (Order k) where
     imap f o = unsafeOrder (EnumMap.mapWithKey f (_map o)) (_vec o)
 
+{-
 -- | Can be fully constructed from a Map
 class (Ixed o, Eq (Index o)) => IsMap o where
     fromMap :: Map (Index o) (IxValue o) -> o
@@ -145,22 +148,28 @@ class (Eq (Index o), Enum (Index o)) => HasOrder o where
     toOrder :: o -> Order (Index o) (IxValue o)
     toPairs :: o -> [(Index o, IxValue o)]
     toPairs = toPairs' . toOrder
+-}
 
 toPairList :: (Ord k, Enum k) => Order k v -> [(k, v)]
-toPairList = LL.toList
+toPairList = Vector.toList . toPairs
+
+toPairs :: (Eq k, Enum k) => Order k a -> Vector (k, a)
+toPairs o = fmap (\k -> (k, _map o ! k)) (_vec o)
 
 -- pos :: HasOrder o => o -> Index o -> Maybe Int
 -- pos = Order.pos . toOrder
 
+{-
 -- Order k v instances
 instance IsOrder  (Order k v) where fromOrder = id
 instance (Ord k, Enum k) => HasOrder (Order k v) where toOrder = id
-instance (Ord k, Enum k) => HasMap   (Order k v) where toMap = Map.fromList . GHC.Exts.toList . toPairs
+instance (Ord k, Enum k) => HasMap   (Order k v) where toMap = Map.fromList . GHC.toList . toPairs
 
 -- Map k v instances
 instance Ord k =>           IsMap   (Map k v) where fromMap = id
-instance (Ord k, Enum k) => IsOrder (Map k v) where fromOrder = Map.fromList . GHC.Exts.toList . toPairs
+instance (Ord k, Enum k) => IsOrder (Map k v) where fromOrder = Map.fromList . GHC.toList . toPairs
 instance                    HasMap  (Map k v) where toMap = id
+-}
 
 -- We can't write instances for [(k, v)] due to existing Ixed [a]
 -- instance.  We could create a wrapper, there's some work to convert
@@ -173,21 +182,18 @@ type instance Index (AList k v) = k
 type instance IxValue (AList k v) = v
 instance (Ord k, Enum k) => IsMap (AList k v) where fromMap = AList . Map.toList
 instance (Ord k, Enum k) => HasMap (AList k v) where toMap = Map.fromList . unAList
-instance (Ord k, Enum k) => IsOrder (AList k v) where fromOrder = AList . GHC.Exts.toList . toPairs
+instance (Ord k, Enum k) => IsOrder (AList k v) where fromOrder = AList . GHC.toList . toPairs
 instance (Ord k, Enum k) => HasOrder (AList k v) where toOrder = fromPairs . unAList
 -}
 
 fromPairs :: forall t k a. (Eq k, Enum k, Foldable t) => t (k, a) -> Order k a
 fromPairs pairs =
     unsafeOrder
-      (fromList (fmap (over _1 fromEnum) pairs'))
-      (fromList (fmap fst pairs'))
+      (GHC.fromList (fmap (over _1 fromEnum) pairs'))
+      (GHC.fromList (fmap fst pairs'))
     where
       pairs' :: [(k, a)]
       pairs' = Foldable.toList pairs
-
-toPairs' :: (Eq k, Enum k) => Order k a -> [(k, a)]
-toPairs' o = fmap (\k -> (k, _map o ! k)) (toList (_vec o))
 
 prop_fromPairs :: Order Char String -> Bool
 prop_fromPairs o = fromPairs (toPairs o) == o
@@ -195,8 +201,8 @@ prop_fromPairs o = fromPairs (toPairs o) == o
 -- | Lookup key by position.  A lookup function appears in
 -- containers in version 0.5.8.
 lookupKey :: Eq k => Int -> Order k a -> Maybe k
-lookupKey i o | i < 0 || i >= length (keys o) = Nothing
-lookupKey i o = Just (LL.index (keys o) i)
+lookupKey i o | i < 0 || i >= Foldable.length (keys o) = Nothing
+lookupKey i o = Just (ListLike.index (keys o) i)
 
 data InsertPosition k v = InsertPosition (Order k v) Int deriving Show
 
@@ -214,55 +220,55 @@ insertAt :: (Enum k, Ord k) => Int -> a -> Order k a -> (Order k a, k)
 insertAt n a o = let k = next o in (insertPairAt n (k, a) o, k)
 
 insertPairAt :: (Enum k, Ord k) => Int -> (k, a) -> Order k a -> Order k a
-insertPairAt n (k, a) o = uncurry (<>) $ over _2 (LL.singleton (k, a) <>) $ LL.splitAt n o
+insertPairAt n (k, a) o = uncurry (<>) $ over _2 (ListLike.singleton (k, a) <>) $ ListLike.splitAt n o
 
 deleteAt :: (Enum k, Ord k) => Int -> Order k a -> Order k a
-deleteAt n = uncurry (<>) . over _2 (LL.drop 1) . LL.splitAt n
+deleteAt n = uncurry (<>) . over _2 (ListLike.drop 1) . ListLike.splitAt n
 
 appendPair :: (Enum k, Ord k) => Order k a -> (k, a) -> Order k a
-appendPair m (k, a) = m <> LL.singleton (k, a)
+appendPair m (k, a) = m <> ListLike.singleton (k, a)
 
 appendElem :: (Enum k, Ord k) => Order k a -> a -> (Order k a, k)
 appendElem o a = let k = next o in (appendPair o (k, a), k)
 
 prependPair :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
-prependPair (k, a) o = LL.singleton (k, a) <> o
+prependPair (k, a) o = ListLike.singleton (k, a) <> o
 
 prependElem :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
 prependElem a o = let k = next o in (prependPair (k, a) o, k)
 
 -- | Return the keys in order.
-keys :: Order k a -> UList k
+keys :: Order k a -> Vector k
 keys = _vec
 
 -- | Return the position of a key, Nothing if absent.
 pos :: Eq k => k -> Order k a -> Maybe Int
 pos k o =
-    case LL.break (== k) (_vec o) of
-      (_, x) | LL.null x -> Nothing
-      (x, _) -> Just (LL.length x)
+    case ListLike.break (== k) (_vec o) of
+      (_, x) | ListLike.null x -> Nothing
+      (x, _) -> Just (ListLike.length x)
 
 -- | Return the values in order.
 values :: (Eq k, Enum k) => Order k a -> [a]
-values x = fmap (\k -> _map x ! k) (toList (keys x))
+values x = fmap (\k -> _map x ! k) (GHC.toList (keys x))
 
--- | Based on Data.Map.mapKeys, because UList is not a functor we
+-- | Based on Data.Map.mapKeys, because Vector is not a functor we
 -- need to eliminate pairs when two k1 are mapped to the same k2.
 mapKeys :: (Enum k1, Enum k2, Eq k2) => (k1 -> k2) -> Order k1 a -> Order k2 a
-mapKeys f o = unsafeOrder (EnumMap.mapKeys f (_map o)) (umap f (_vec o))
+mapKeys f o = unsafeOrder (EnumMap.mapKeys f (_map o)) (fmap f (_vec o))
 
 ilookup :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a)
 ilookup k o =
     case EnumMap.lookup k (_map o) of
       Nothing -> Nothing
-      Just a -> Just (length (fst (break (== k) (_vec o))), a)
+      Just a -> Just (Foldable.length (fst (ListLike.break (== k) (_vec o))), a)
 
 -- | Like 'Data.Set.minView', if k is present returns the position,
 -- associated value, and the order with that value removed.
 view :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a, Order k a)
 view k o =
   case ilookup k o of
-    Just (i, a) -> Just (i, a, unsafeOrder (EnumMap.delete k (_map o)) (LL.filter (/= k) (_vec o)))
+    Just (i, a) -> Just (i, a, unsafeOrder (EnumMap.delete k (_map o)) (ListLike.filter (/= k) (_vec o)))
     Nothing -> Nothing
 
 member :: (Enum k) => k -> Order k v -> Bool
@@ -317,41 +323,41 @@ instance (Enum k, Eq k) => At (Order k a) where
     at k f o =
         case EnumMap.lookup k (_map o) of
           Just a ->
-              fmap (maybe (unsafeOrder (EnumMap.delete k (_map o)) (LL.filter (/= k) (_vec o)))
+              fmap (maybe (unsafeOrder (EnumMap.delete k (_map o)) (ListLike.filter (/= k) (_vec o)))
                           (\a' -> unsafeOrder (EnumMap.insert k a' (_map o)) (_vec o)))
                    (f (Just a))
           Nothing ->
               fmap (maybe o
-                          (\a' -> unsafeOrder (EnumMap.insert k a' (_map o)) (_vec o <> singleton k)))
+                          (\a' -> unsafeOrder (EnumMap.insert k a' (_map o)) (_vec o <> ListLike.singleton k)))
                    (f Nothing)
 
-instance (Ord k, Enum k, LL.FoldableLL (Order k v) (k, v)) => LL.ListLike (Order k v) (k, v) where
+instance (Ord k, Enum k, FoldableLL (Order k v) (k, v)) => ListLike (Order k v) (k, v) where
   singleton :: (k, v) -> Order k v
   singleton (k, v) = unsafeOrder (EnumMap.singleton k v) [k]
   null :: Order k v -> Bool
-  null o = LL.null (_vec o)
+  null o = ListLike.null (_vec o)
   uncons :: Order k v -> Maybe ((k, v), Order k v)
   uncons o =
-    case LL.uncons (_vec o) of
+    case ListLike.uncons (_vec o) of
       Just (k0, ks') ->
         let (mk, mks) = EnumMap.partitionWithKey (\k _ -> k == k0) (_map o) in
-          Just (LL.head (EnumMap.toList @k mk), unsafeOrder mks ks')
+          Just (ListLike.head (EnumMap.toList @k mk), unsafeOrder mks ks')
       Nothing -> Nothing
 
   drop :: Int -> Order k a -> Order k a
   drop n o =
-    let (a, b) = LL.splitAt n (_vec o) in
+    let (a, b) = ListLike.splitAt n (_vec o) in
     unsafeOrder (Foldable.foldr EnumMap.delete (_map o) a) b
 
   take :: Int -> Order k a -> Order k a
   take n o =
-    let (a, b) = LL.splitAt n (_vec o) in
+    let (a, b) = ListLike.splitAt n (_vec o) in
     unsafeOrder (Foldable.foldr EnumMap.delete (_map o) b) a
 
   splitAt :: Int -> Order k a -> (Order k a, Order k a)
-  splitAt n = over _1 fromPairs . over _2 fromPairs . LL.splitAt n . toPairs
+  splitAt n = over _1 fromPairs . over _2 fromPairs . ListLike.splitAt n . toPairs
 
-instance (Enum k, Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
+instance (Enum k, Ord k, Monoid (Order k v)) => FoldableLL (Order k v) (k, v) where
     foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _map xs ! k)) r0 (_vec xs)
     foldr f r0 xs = Foldable.foldr (\k r -> f (k, _map xs ! k) r) r0 (_vec xs)
 
@@ -368,35 +374,35 @@ next o = head (dropWhile (`EnumMap.member` (_map o)) [toEnum 0 ..])
 
 -- | Replace the current ordering with the given key list.  Duplicate
 -- keys are ignored, missing keys are appended.
-permuteUnsafe :: forall k v. (Enum k, Ord k) => UList k -> Order k v -> Order k v
+permuteUnsafe :: forall k v. (Enum k, Ord k) => Vector k -> Order k v -> Order k v
 permuteUnsafe neworder o =
     unsafeOrder (_map o) (present <> missing)
     where
       -- Remove unknown keys
-      present :: UList k
-      present = fromList (List.nub (toList (LL.filter (`EnumMap.member` _map o) neworder)))
+      present :: Vector k
+      present = GHC.fromList (List.nub (GHC.toList (ListLike.filter (`EnumMap.member` _map o) neworder)))
       -- Collect the values that are missing from the new key order
-      missing :: UList k
-      missing = fromList (EnumMap.keys (foldr EnumMap.delete (_map o) present))
+      missing :: Vector k
+      missing = GHC.fromList (EnumMap.keys (foldr EnumMap.delete (_map o) present))
 
 -- | A permute function that verifies neworder is a valid permutation.
-permute :: forall k v. (Enum k, Ord k) => UList k -> Order k v -> Either String (Order k v)
+permute :: forall k v. (Enum k, Ord k) => Vector k -> Order k v -> Either String (Order k v)
 permute neworder o =
-    case LL.partition (`EnumMap.member` _map o) neworder of
-      (_, b) | length b /= 0 -> Left "invalid keys"
-      (a, _) | length a < length (_vec o) -> Left "missing keys"
-      (a, _) | LL.nub a /= a -> Left "duplicate keys"
+    case ListLike.partition (`EnumMap.member` _map o) neworder of
+      (_, b) | Foldable.length b /= 0 -> Left "invalid keys"
+      (a, _) | Foldable.length a < Foldable.length (_vec o) -> Left "missing keys"
+      (a, _) | ListLike.nub a /= a -> Left "duplicate keys"
       _ -> Right (unsafeOrder (_map o) neworder)
 
 instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
-      InsertPosition o <$> choose (0, length o)
+      InsertPosition o <$> choose (0, Foldable.length o)
 
 instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
-      case length o of
+      case Foldable.length o of
         0 -> return $ ElementPosition o Nothing
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
 
@@ -404,12 +410,12 @@ instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Ord
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
       let ks' = nub ks
-      (vs :: [v]) <- vector (LL.length ks')
-      return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
+      (vs :: [v]) <- vector (ListLike.length ks')
+      return (fromPairs (ListLike.zip ks' vs :: [(k, v)]) :: Order k v)
 
 prop_lookupKey :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupKey (InsertPosition o i) a =
-    lookupKey i o' == Just k && lookupKey (length o) o == Nothing
+    lookupKey i o' == Just k && lookupKey (Foldable.length o) o == Nothing
     where o' = insertPairAt i (k, a) o
           k = next o
 
@@ -421,56 +427,56 @@ prop_lookup (InsertPosition o i) a =
 
 prop_lookupPair :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupPair (InsertPosition o i) a =
-    lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
+    lookupPair i o' == Just (k, a) && lookupPair (Foldable.length o) o == Nothing
     where o' = insertPairAt i (k, a) o
           k = next o
 
 prop_splitAt :: (k ~ Char, a ~ String) => ElementPosition k a -> Bool
 prop_splitAt (ElementPosition o i) =
-    let (a, b) = LL.splitAt (maybe 0 id i) o in
+    let (a, b) = ListLike.splitAt (maybe 0 id i) o in
     o == a <> b
 
 prop_keys :: Order Char String -> Bool
 prop_keys o = EnumMap.keysSet (_map o) == Set.fromList (Foldable.toList (_vec o))
 
 prop_next :: Order Char String -> Bool
-prop_next o = isNothing (LL.elemIndex (next o) (keys o))
+prop_next o = isNothing (ListLike.elemIndex (next o) (keys o))
 
 prop_uncons :: Order Char Int -> Bool
 prop_uncons o =
-   o == maybe mempty (\(pair, o') -> singleton pair <> o') (uncons o)
+   o == maybe mempty (\(pair, o') -> ListLike.singleton pair <> o') (ListLike.uncons o)
 
 prop_null :: Order Char Int -> Bool
-prop_null o = null o == isNothing (uncons o)
+prop_null o = null o == isNothing (ListLike.uncons o)
 
 prop_singleton :: (Char, Int) -> Bool
-prop_singleton pair = uncons (singleton pair) == Just (pair, mempty :: Order Char Int)
+prop_singleton pair = ListLike.uncons (ListLike.singleton pair) == Just (pair, mempty :: Order Char Int)
 
 -- | Map and list should contain the same keys with no duplicates
 prop_toPairs_fromPairs :: Order Int String -> Bool
 prop_toPairs_fromPairs o =
-    fromList (toList o :: [(Int, String)]) == o
+    GHC.fromList (GHC.toList o :: [(Int, String)]) == o
 
 prop_delete :: Order Int String -> Property
-prop_delete o | length o == 0 = property True
+prop_delete o | Foldable.length o == 0 = property True
 prop_delete o =
-    forAll (choose (0, length o - 1)) $ \i ->
-    length (deleteAt i o) == length o - 1
+    forAll (choose (0, Foldable.length o - 1)) $ \i ->
+    Foldable.length (deleteAt i o) == Foldable.length o - 1
 
 prop_insertAt :: (Int, String) -> Order Int String -> Property
 prop_insertAt v@(k, _) o =
-    forAll (choose (0, length o)) $ \i ->
-    Data.Order.member k o || (length (insertPairAt i v o) == length o + 1)
+    forAll (choose (0, Foldable.length o)) $ \i ->
+    Data.Order.member k o || (Foldable.length (insertPairAt i v o) == Foldable.length o + 1)
 
 -- | Use an explicit generator to create a valid list position.
 prop_insert_delete :: (Int, String) -> Order Int String -> Property
 prop_insert_delete (k, a) o =
-    forAll (choose (0, length o)) $ \i ->
+    forAll (choose (0, Foldable.length o)) $ \i ->
         Data.Order.member k o || (view k (insertPairAt i (k, a) o) == Just (i, a, o))
 
 prop_insert_delete_pos :: (Int, String) -> Order Int String -> Property
 prop_insert_delete_pos v@(k, _) o =
-    forAll (choose (0, length o)) $ \i ->
+    forAll (choose (0, Foldable.length o)) $ \i ->
         Data.Order.member k o || (deleteAt i (insertPairAt i v o) == o)
 
 tests :: IO Result

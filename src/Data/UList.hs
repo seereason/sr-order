@@ -3,7 +3,7 @@
 {-# LANGUAGE DeriveAnyClass, DeriveDataTypeable, DeriveGeneric, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
 
 module Data.UList
-  ( UList
+  ( UList(..)
   , umap
   ) where
 
