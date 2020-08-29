@@ -63,6 +63,7 @@ import Data.EnumMap as EnumMap ((!), EnumMap)
 import qualified Data.EnumMap as EnumMap
 import Data.List as List (nub)
 import qualified Data.ListLike as LL
+import Data.Maybe (isNothing)
 import Data.Monoid
 import Data.Order.Type (fromPairsUnsafe, fromPairsSafe, next, Order(..), overPairs, ioverPairs, toPairList, toPairs, unsafeOrder)
 import Data.SafeCopy (SafeCopy(..), safeGet, safePut)
@@ -138,7 +139,8 @@ insertAt n a o = let k = next o in (insertPairAt n (k, a) o, k)
 insertPairAtWith :: Enum k => (a -> a -> a) -> Int -> (k, a) -> Order k a -> Order k a
 insertPairAtWith f n (k, new) o =
   case EnumMap.lookup k (_map o) of
-    Nothing -> unsafeOrder (EnumMap.insert k new (_map o)) (_vec o)
+    Nothing ->
+      unsafeOrder (EnumMap.insert k new (_map o)) (_vec o <> Vector.singleton k)
     Just _old ->
       unsafeOrder
         (EnumMap.insertWith f k new (_map o))
@@ -379,7 +381,7 @@ vectorUncons x = if Vector.null x then Nothing else Just (Vector.head x, Vector.
 appendEnum :: (Enum k, Ord k) => v -> Order k v -> Order k v
 appendEnum v o = o <> Data.Order.singleton (next o) v
 
-newtype LL a = LL {unLL :: a}
+newtype LL a = LL {unLL :: a} deriving (Eq, Ord)
 
 instance Monoid a => Monoid (LL a) where
   mempty = LL mempty
@@ -445,7 +447,7 @@ instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Ord
 
 prop_lookupKey :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookupKey (InsertPosition o i) a =
-    lookupKey i o' == Just k && lookupKey (Foldable.length o) o == Nothing
+    lookupKey i o' == Just k && lookupKey (Data.Order.length o) o == Nothing
     where o' = insertPairAt i (k, a) o
           k = next o
 
@@ -464,25 +466,23 @@ prop_lookupPair (InsertPosition o i) a =
 prop_keys :: Order Char String -> Bool
 prop_keys o = EnumMap.keysSet (_map o) == Set.fromList (Foldable.toList (_vec o))
 
-#if 0
 prop_splitAt :: (k ~ Char, a ~ String) => ElementPosition k a -> Bool
 prop_splitAt (ElementPosition o i) =
-    let (a, b) = ListLike.splitAt (maybe 0 id i) o in
-    o == a <> b
+    let (a, b) = ListLike.splitAt (maybe 0 id i) (LL o) in
+    o == unLL (a <> b)
 
 prop_next :: Order Char String -> Bool
 prop_next o = isNothing (ListLike.elemIndex (next o) (keys o))
 
 prop_uncons :: Order Char Int -> Bool
 prop_uncons o =
-   o == maybe mempty (\(pair, o') -> ListLike.singleton pair <> o') (ListLike.uncons o)
+   LL o == maybe mempty (\(pair, o') -> ListLike.singleton pair <> o') (ListLike.uncons (LL o))
 
 prop_null :: Order Char Int -> Bool
-prop_null o = null o == isNothing (ListLike.uncons o)
+prop_null o = Data.Order.null o == isNothing (ListLike.uncons (LL o))
 
 prop_singleton :: (Char, Int) -> Bool
-prop_singleton pair = ListLike.uncons (ListLike.singleton pair) == Just (pair, mempty :: Order Char Int)
-#endif
+prop_singleton pair = ListLike.uncons (ListLike.singleton pair) == Just (pair, LL (mempty :: Order Char Int))
 
 -- | Map and list should contain the same keys with no duplicates
 prop_toPairs_fromPairs :: Order Int String -> Bool
@@ -499,6 +499,13 @@ prop_insertAt :: (Int, String) -> Order Int String -> Property
 prop_insertAt v@(k, _) o =
     forAll (choose (0, Foldable.length o)) $ \i ->
     Data.Order.member k o || (Foldable.length (insertPairAt i v o) == Foldable.length o + 1)
+
+prop_insertAt_deleteAt :: (Int, String) -> Order Int String -> Property
+prop_insertAt_deleteAt v@(k, _) o =
+  forAll (choose (0, Foldable.length o)) $ \i ->
+  if Data.Order.member k o
+  then deleteAt i o == deleteAt i (insertPairAt i v (deleteAt i o))
+  else o == deleteAt i (insertPairAt i v o)
 
 -- | Use an explicit generator to create a valid list position.
 prop_insert_delete :: (Int, String) -> Order Int String -> Property
@@ -518,14 +525,16 @@ tests = do
      quickCheckResult prop_lookup,
      quickCheckResult prop_lookupKey,
      quickCheckResult prop_lookupPair,
-     -- quickCheckResult prop_splitAt,
-     -- quickCheckResult prop_next,
-     -- quickCheckResult prop_uncons,
-     -- quickCheckResult prop_null,
-     -- quickCheckResult prop_singleton,
+     quickCheckResult prop_splitAt,
+     quickCheckResult prop_next,
+     quickCheckResult prop_uncons,
+     quickCheckResult prop_null,
+     quickCheckResult prop_singleton,
      quickCheckResult prop_toPairs_fromPairs,
      quickCheckResult prop_delete,
      quickCheckResult prop_insertAt,
+     quickCheckResult prop_insertAt_deleteAt,
+     quickCheckResult prop_insertAt_deleteAt,
      quickCheckResult prop_insert_delete,
      quickCheckResult prop_insert_delete_pos,
      quickCheckResult prop_fromPairs
