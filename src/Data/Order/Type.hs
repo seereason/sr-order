@@ -105,7 +105,7 @@ toPairs o = fmap (\k -> (k, _map o ! k)) (_vec o :: Vector k)
 
 fromPairsSafe :: forall t k a. (Ord k, Enum k, Foldable t) => t (k, a) -> Order k a
 fromPairsSafe pairs =
-  foldr (\(k, a) (Order m v) -> if EnumMap.member k m then Order (EnumMap.insert k a m) (Vector.cons k v) else Order m v) mempty pairs
+  foldr (\(k, a) (Order m v) -> if EnumMap.member k m then Order m v else Order (EnumMap.insert k a m) (Vector.cons k v)) mempty pairs
 
 fromPairs :: forall t k a. (Ord k, Enum k, Foldable t) => t (k, a) -> Order k a
 fromPairs = fromPairsSafe
