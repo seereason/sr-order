@@ -140,7 +140,8 @@ insertPairAtWith :: Enum k => (a -> a -> a) -> Int -> (k, a) -> Order k a -> Ord
 insertPairAtWith f n (k, new) o =
   case EnumMap.lookup k (_map o) of
     Nothing ->
-      unsafeOrder (EnumMap.insert k new (_map o)) (_vec o <> Vector.singleton k)
+      let (a, b) = Vector.splitAt n (_vec o) in
+      unsafeOrder (EnumMap.insert k new (_map o)) (a <> Vector.singleton k <> b)
     Just _old ->
       unsafeOrder
         (EnumMap.insertWith f k new (_map o))
@@ -426,6 +427,7 @@ instance (Enum k, Ord k, Monoid (Order k v)) => LL.FoldableLL (LL (Order k v)) (
 
 -- Quickcheck
 
+-- Build an arbitrary order and a valid insert position for that order
 instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
@@ -451,6 +453,9 @@ prop_lookupKey (InsertPosition o i) a =
     where o' = insertPairAt i (k, a) o
           k = next o
 
+-- If we insert (next o, a) into o at position i, we should then find a at
+-- k in the new order and we should not find it in the original
+-- order.
 prop_lookup :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
 prop_lookup (InsertPosition o i) a =
     lookup k o' == Just a && lookup k o == Nothing
@@ -500,12 +505,14 @@ prop_insertAt v@(k, _) o =
     forAll (choose (0, Foldable.length o)) $ \i ->
     Data.Order.member k o || (Foldable.length (insertPairAt i v o) == Foldable.length o + 1)
 
+{-
 prop_insertAt_deleteAt :: (Int, String) -> Order Int String -> Property
 prop_insertAt_deleteAt v@(k, _) o =
   forAll (choose (0, Foldable.length o)) $ \i ->
   if Data.Order.member k o
   then deleteAt i o == deleteAt i (insertPairAt i v (deleteAt i o))
   else o == deleteAt i (insertPairAt i v o)
+-}
 
 -- | Use an explicit generator to create a valid list position.
 prop_insert_delete :: (Int, String) -> Order Int String -> Property
@@ -521,21 +528,19 @@ prop_insert_delete_pos v@(k, _) o =
 tests :: IO Result
 tests = do
   mconcat <$> sequence
-    [quickCheckResult prop_keys,
-     quickCheckResult prop_lookup,
-     quickCheckResult prop_lookupKey,
-     quickCheckResult prop_lookupPair,
-     quickCheckResult prop_splitAt,
-     quickCheckResult prop_next,
-     quickCheckResult prop_uncons,
-     quickCheckResult prop_null,
-     quickCheckResult prop_singleton,
-     quickCheckResult prop_toPairs_fromPairs,
-     quickCheckResult prop_delete,
-     quickCheckResult prop_insertAt,
-     quickCheckResult prop_insertAt_deleteAt,
-     quickCheckResult prop_insertAt_deleteAt,
-     quickCheckResult prop_insert_delete,
-     quickCheckResult prop_insert_delete_pos,
-     quickCheckResult prop_fromPairs
+    [ quickCheckResult $ withMaxSuccess 100 prop_keys
+    , quickCheckResult $ withMaxSuccess 100 prop_lookup
+    , quickCheckResult $ withMaxSuccess 100 prop_lookupKey
+    , quickCheckResult $ withMaxSuccess 100 prop_lookupPair
+    , quickCheckResult $ withMaxSuccess 100 prop_splitAt
+    , quickCheckResult $ withMaxSuccess 100 prop_next
+    , quickCheckResult $ withMaxSuccess 100 prop_uncons
+    , quickCheckResult $ withMaxSuccess 100 prop_null
+    , quickCheckResult $ withMaxSuccess 100 prop_singleton
+    , quickCheckResult $ withMaxSuccess 100 prop_toPairs_fromPairs
+    , quickCheckResult $ withMaxSuccess 100 prop_delete
+    , quickCheckResult $ withMaxSuccess 100 prop_insertAt
+    , quickCheckResult $ withMaxSuccess 100 prop_insert_delete
+    , quickCheckResult $ withMaxSuccess 100 prop_insert_delete_pos
+    , quickCheckResult $ withMaxSuccess 100 prop_fromPairs
     ] >>= throwResult
