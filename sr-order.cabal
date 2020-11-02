@@ -1,5 +1,5 @@
 name:               sr-order
-version:            1.3.1
+version:            1.4
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -19,9 +19,9 @@ description:
 library
   default-language: Haskell2010
   Default-Extensions: ConstraintKinds, CPP, DataKinds, DeriveDataTypeable, DeriveFunctor, DeriveGeneric
-  Default-Extensions: FlexibleInstances, FlexibleContexts, LambdaCase, MultiParamTypeClasses, OverloadedStrings
-  Default-Extensions: RankNTypes, RecordWildCards, ScopedTypeVariables, StandaloneDeriving, TupleSections
-  Default-Extensions: TypeApplications, TypeFamilies, TypeOperators
+  Default-Extensions: FlexibleInstances, FlexibleContexts, InstanceSigs, LambdaCase, MultiParamTypeClasses
+  Default-Extensions: OverloadedStrings, RankNTypes, RecordWildCards, ScopedTypeVariables, StandaloneDeriving
+  Default-Extensions: TupleSections, TypeApplications, TypeFamilies, TypeOperators
   hs-source-dirs: src
   ghc-options: -Wall -O
   build-depends:
@@ -40,7 +40,9 @@ library
   exposed-modules:
     Data.EnumMap
     Data.Order
-    Data.Order.Type
+    Data.Order.One
+    Data.Order.Order
+    Data.Order.AssocList
     Data.UList
 
 test-suite order-tests
