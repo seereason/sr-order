@@ -33,6 +33,10 @@ data Order k v =
     , _vec :: Vector k
     } deriving (Generic, Data, Typeable, Functor, Read)
 
+instance (Eq k, Ord k, Enum k) => Ordered (Order k) k v where
+  -- Override methods that could benefit from the At instance
+  delete k o = set (at k) Nothing o
+
 instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
     (<>) a b =
       let m = EnumMap.union (_map a) (_map b)

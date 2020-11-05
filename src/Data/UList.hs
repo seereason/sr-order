@@ -8,7 +8,7 @@ module Data.UList
   ) where
 
 import Data.Data (Data)
-import Data.ListLike as LL (FoldableLL(..), ListLike(..), nub, singleton, uncons, null)
+import Data.ListLike as LL (FoldableLL(..), ListLike(..), singleton, uncons, null)
 import Data.Semigroup (Semigroup(..))
 import Data.Serialize (Serialize)
 import Data.SafeCopy (SafeCopy)
