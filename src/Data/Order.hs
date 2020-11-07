@@ -93,13 +93,17 @@ import qualified Data.Set as Set (fromList, insert, member)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.Vector (Vector) -- hiding ((!), break, drop, dropWhile, foldr, fromList, head, length, null, sequence, singleton, take, toList)
 import qualified Data.Vector as Vector
+import Data.Word
+import Data.Int
 import Extra.QuickCheck
 import qualified GHC.Exts as GHC
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import Test.QuickCheck
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 
-prop_fromPairs :: Order Char String -> Bool
+type Key = Integer
+
+prop_fromPairs :: Order Key String -> Bool
 prop_fromPairs o = fromPairs (pairs o) == o
 
 -- | Lookup key by position.  A lookup function appears in
@@ -287,7 +291,7 @@ prop_lookupPair (InsertPosition o i) a =
     where o' = insertPairAt i (k, a) o
           k = next o
 
-prop_keys :: Order Char String -> Bool
+prop_keys :: Order Key String -> Bool
 prop_keys o = EnumMap.keysSet (_map o) == Set.fromList (Foldable.toList (_vec o))
 
 prop_splitAt :: (k ~ Char, a ~ String) => ElementPosition k a -> Bool
@@ -295,18 +299,18 @@ prop_splitAt (ElementPosition o i) =
     let (a, b) = ListLike.splitAt (maybe 0 id i) (LL o) in
     o == unLL (a <> b)
 
-prop_next :: Order Char String -> Bool
+prop_next :: Order Key String -> Bool
 prop_next o = isNothing (ListLike.elemIndex (next o) (keys o))
 
-prop_uncons :: Order Char Int -> Bool
+prop_uncons :: Order Key Int -> Bool
 prop_uncons o =
    o == maybe mempty (\(pair, o') -> one pair <> o') (uncons o)
 
-prop_null :: Order Char Int -> Bool
+prop_null :: Order Key Int -> Bool
 prop_null o = Foldable.null o == isNothing (ListLike.uncons (LL o))
 
-prop_singleton :: (Char, Int) -> Bool
-prop_singleton pair = ListLike.uncons (ListLike.singleton pair) == Just (pair, LL (mempty :: Order Char Int))
+prop_singleton :: (Key, Int) -> Bool
+prop_singleton pair = ListLike.uncons (ListLike.singleton pair) == Just (pair, LL (mempty :: Order Key Int))
 
 -- | Map and list should contain the same keys with no duplicates
 prop_toPairs_fromPairs :: Order Int String -> Bool

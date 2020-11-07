@@ -214,6 +214,7 @@ class (FoldableWithIndex (Index (o v)) o,
       neworder' = nub neworder <> (keys o \\ neworder)
 
   splitAt :: Int -> o v -> (o v, o v)
+  splitAt i o | i <= 0 = (mempty, o)
   splitAt i o =
     case uncons o of
       Nothing -> (mempty, mempty)
@@ -275,6 +276,7 @@ class (FoldableWithIndex (Index (o v)) o,
   -- λ> next (AssocList ([] :: [(Int, String)]))
   -- 0
   -- @@
+  -- Note that this will fail if one of the keys equals maxBound
   next :: Enum k => o v -> k
   next = foldr max (toEnum 0) . fmap succ . keys
 
