@@ -14,7 +14,6 @@ import qualified Data.EnumMap as EnumMap
 import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import qualified Data.ListLike as LL
-import Data.Order.One
 import Data.SafeCopy (base, contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import qualified Data.Sequence as Seq
@@ -32,10 +31,6 @@ data Order k v =
     { _map :: EnumMap k v
     , _vec :: Vector k
     } deriving (Generic, Data, Typeable, Functor, Read)
-
-instance (Eq k, Ord k, Enum k) => Ordered (Order k) k v where
-  -- Override methods that could benefit from the At instance
-  delete k o = set (at k) Nothing o
 
 instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
     (<>) a b =
@@ -103,10 +98,10 @@ instance SafeCopy (Order k v) => Serialize (Order k v) where
     get = safeGet
 
 instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
-  show o = "fromPairsUnsafe " <> show (toPairList o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
+  show o = "fromPairsUnsafe " <> show (toPairs o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
 
 instance forall k v. (Ord k, Enum k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (Order k v) where
-  pPrint o = text "Order " <> pPrint (toPairList o)
+  pPrint o = text "Order " <> pPrint (Vector.toList (toPairs o))
 
 -- Fold over the values only
 -- @@
@@ -133,16 +128,14 @@ instance (Enum k, Ord k) => FoldableWithIndex k (Order k) where
 instance Enum k => FunctorWithIndex k (Order k) where
     imap f o = Order (EnumMap.mapWithKey f (_map o)) (_vec o)
 
-instance (Ord k, Enum k) => One (Order k v) where
-  type OneItem (Order k v) = (k, v)
-  one (k, v) = fromPairsUnsafe @[] [(k, v)]
-
 toPairs :: forall k a. Enum k => Order k a -> Vector (k, a)
 toPairs o = fmap (\k -> (k, _map o ! k)) (_vec o :: Vector k)
+{-# DEPRECATED toPairs "Use pairs" #-}
 
 fromPairsUnsafe :: forall t k a. (Ord k, Enum k, Foldable t) => t (k, a) -> Order k a
 fromPairsUnsafe prs =
   foldr (\(k, a) (Order m v) -> Order (EnumMap.insert k a m) (Vector.cons k v)) mempty prs
+{-# DEPRECATED fromPairsUnsafe "Use fromPairs" #-}
 
 instance (Ord k, Eq v) => Eq (Order k v) where
   a == b = _map a == _map b && _vec a == _vec b

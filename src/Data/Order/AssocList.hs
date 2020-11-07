@@ -1,6 +1,6 @@
 -- | A simple type that satisfies 'IndexedOrder' and 'AList'
 
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveAnyClass, TemplateHaskell, UndecidableInstances #-}
 
 module Data.Order.AssocList where
 
@@ -44,6 +44,9 @@ instance Foldable (AssocList k) where
   foldMap _ (AssocList []) = mempty
   foldMap f (AssocList ((_k, a) : prs)) = f a <> foldMap f (AssocList prs)
 
-instance (Enum k, Ord k) => FoldableWithIndex k (AssocList k) where
+instance FoldableWithIndex k (AssocList k) where
   ifoldMap :: forall a r. Monoid r => (k -> a -> r) -> AssocList k a -> r
   ifoldMap f (AssocList o) = foldMap (uncurry f) o
+
+deriving instance (Eq k, Eq v) => Eq (AssocList k v)
+deriving instance (Ord k, Ord v) => Ord (AssocList k v)

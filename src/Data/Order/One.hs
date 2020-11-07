@@ -51,6 +51,7 @@ import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
 import Data.Maybe (fromJust)
 import Data.Order.AssocList
+import Data.Order.Order
 import Data.Set as Set (insert, Set)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 
@@ -72,6 +73,9 @@ instance One (AssocList k a) where
   type OneItem (AssocList k a) = (k, a)
   one (k, a) = AssocList [(k, a)]
 
+-- Ordered currently pinned to Order
+-- instance (Eq k, Ord k) => Ordered (AssocList k) k v
+
 -- | A list-like collection with an index and an ordering.  The index
 -- is @k ~ Index (o v)@, while the ordering is implied by the
 -- operation of the 'Foldable' and 'FoldableWithIndex' instances.  It
@@ -88,7 +92,8 @@ type Ordered (o :: * -> *) v =
    Eq (Index (o v)), Ord (Index (o v)))
 -}
 
-type Ordered' (o :: * -> *) v = (Ordered o (Index (o v)) v)
+-- Some weak constraints, I use these to see what is missing
+type Ordered' (o :: * -> *) k v = (FoldableWithIndex k o, Eq k, Ord k)
 
 toPairList :: Ordered o k v => o v -> [(k, v)]
 toPairList = pairs
@@ -100,7 +105,8 @@ class (FoldableWithIndex (Index (o v)) o,
        Monoid (o v),
        One (o v),
        OneItem (o v) ~ (k, v),
-       Eq k, Ord k
+       Eq k, Ord k,
+       o ~ Order k
       ) => Ordered o k v where
 
   -- | Return the key value pairs in order.
@@ -280,6 +286,15 @@ class (FoldableWithIndex (Index (o v)) o,
   append :: Enum k => o v -> v -> (o v, k)
   append o v = let k = next o in (o <> one (k, v), k)
 
+instance (Ord k, Enum k) => One (Order k v) where
+  type OneItem (Order k v) = (k, v)
+  one (k, v) = fromPairsUnsafe @[] [(k, v)]
+
+instance (Eq k, Ord k, Enum k) => Ordered (Order k) k v where
+  -- Override methods that could benefit from the At instance
+  delete k o = set (at k) Nothing o
+  -- we should also do good uncons, splitAt, and break implementations here
+
 overPairs ::
   forall o v k o' v' k'.
   (Ordered o k v, Ordered o' k' v')
@@ -301,3 +316,25 @@ ioverPairs f o = foldr g mempty (zip [0..] (pairs o))
   where
     -- g :: (Int, (k, v)) -> o' v' -> o' v'
     g (i, (k, v)) r = one (f i (k, v)) <> r
+
+{-
+-- This doesn't work because it provokes v ~ (Int, v).  Don't even
+-- try.
+
+instance (FoldableWithIndex (Index [v]) [],
+          Ixed [v],
+          Index [v] ~ k,
+          IxValue [v] ~ v,
+          Monoid [v],
+          One [v],
+          OneItem [v] ~ (k, v),
+          Eq k, Ord k) => Ordered [] Int v where
+-}
+
+{-
+instance Ordered Set UserId ()
+
+instance One (Set UserId) where
+  type OneItem (Set UserId) = (UserId, ())
+  one = Set.singleton
+-}
