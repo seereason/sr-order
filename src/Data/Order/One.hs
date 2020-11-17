@@ -19,6 +19,7 @@ module Data.Order.One
   , values
   , member
   , pos
+  , keyView
   , singleton
   , cons
   -- * With At constraint
@@ -33,6 +34,7 @@ module Data.Order.One
   , drop
   , lookupPair
   , lookup
+  , (!)
   , partition
   , filter
   , insertPairAt
@@ -45,6 +47,9 @@ module Data.Order.One
   , next
   , insertAt
   , append
+  , difference
+  , union
+  , unions
   , lookupKey
   , prop_fromPairs
   , prop_keys
@@ -55,16 +60,20 @@ module Data.Order.One
   , prop_lookupPair
   , prop_uncons
   , prop_null
+  , prop_singleton
+  , prop_toPairs_fromPairs
+  , prop_delete
+  , prop_insertAt
+  , prop_insert_delete
+  , prop_insert_delete_pos
+  , prop_pos_insertAt
   ) where
 
-import Data.EnumMap as EnumMap (fromList)
 import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
-import Data.Maybe (fromJust, isNothing)
---import Data.Order.AssocList
---import Data.Order.Order
-import Data.Set as Set (fromList, insert, Set)
-import GHC.Exts as GHC (fromList)
+import Data.Maybe (fromJust, fromMaybe, isNothing)
+import Data.Proxy
+import Data.Set as Set (fromList, insert, notMember, Set)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
 
@@ -155,6 +164,14 @@ class (FoldableWithIndex (Index (o v)) o,
           Just ((k', v), o') ->
             if k == k' then Just n else go (succ n) o'
 
+  -- | Like 'Data.Set.minView', if k is present returns the position,
+  -- associated value, and the order with that value removed.  (was view)
+  keyView :: k -> o v -> Maybe (Int, v, o v)
+  keyView k o =
+    case (lookup k o, pos k o) of
+      (Just v, Just i) -> Just (i, v, delete k o)
+      _ -> Nothing
+
   singleton :: k ~ Index (o v) => k -> v -> o v
   singleton k v = one (k, v)
 
@@ -163,8 +180,11 @@ class (FoldableWithIndex (Index (o v)) o,
   cons (k, a) o = one (k, a) <> o
 
   -- | Like Map.lookup.
-  lookup :: Index (o v) -> o v -> Maybe v
+  lookup :: k ~ Index (o v) => k -> o v -> Maybe v
   lookup k = preview (ix k)
+
+  (!) :: k ~ Index (o v) => k -> o v -> v
+  o ! k = fromMaybe (error "Order.!: given key is not an element in the map") (lookup o k)
 
   delete :: k -> o v -> o v
   -- delete k o = filter (\_ k' _ -> k /= k') o
@@ -300,6 +320,25 @@ class (FoldableWithIndex (Index (o v)) o,
   append :: Enum k => o v -> v -> (o v, k)
   append o v = let k = next o in (o <> one (k, v), k)
 
+  difference :: o v -> o v -> o v
+  difference a b =
+    let bks = keysSet b in
+    filter (\_ k _ -> Set.notMember k bks) a
+
+  union :: o v -> o v -> o v
+  union a b = a <> difference b a
+
+  unions :: [o v] -> o v
+  unions os =
+    fst $ foldr f (mempty, mempty) os
+    where
+      f :: o v -> (o v, Set k) -> (o v, Set k)
+      f o (r, ks) =
+        let r' :: o v
+            r' = r <> filter (\_ k _ -> Set.notMember k ks) o
+            ks' = ks <> keysSet o in
+        (r', ks')
+
 overPairs ::
   forall o v k o' v' k'.
   (Ordered o k v, Ordered o' k' v')
@@ -394,3 +433,53 @@ prop_uncons o = o == maybe mempty (\(pair, o') -> one pair <> o') (uncons o)
 
 prop_null :: forall o v k. Ordered o k v => o v -> Bool
 prop_null o = null o == isNothing (uncons o)
+
+instance Arbitrary (Proxy a) where arbitrary = pure Proxy
+
+prop_singleton :: forall o v k. (Ordered o k v, k ~ Index (o v), Eq v, Eq (o v)) => Proxy (o v) -> (k, v) -> Bool
+prop_singleton _ pair = uncons (one pair :: o v) == Just (pair, mempty)
+
+-- | Map and list should contain the same keys with no duplicates
+prop_toPairs_fromPairs ::
+  forall o v k. (Ordered o k v, Eq (o v), Arbitrary (o v), Arbitrary k, Arbitrary v)
+  => o v
+  -> Bool
+prop_toPairs_fromPairs o =
+    fromPairs (pairs o) == o
+
+prop_delete :: forall o v k. (Ordered o k v) => o v -> Property
+prop_delete o | length o == 0 = property True
+prop_delete o =
+    forAll (choose (0, length o - 1)) $ \i ->
+    length (deleteAt i o) == length o - 1
+
+prop_insertAt :: forall o v k. (Ordered o k v) => (k, v) -> o v -> Property
+prop_insertAt v@(k, _) o =
+    forAll (choose (0, length o)) $ \i ->
+    member k o || (length (insertPairAt i v o) == length o + 1)
+
+{-
+prop_insertAt_deleteAt :: (Int, String) -> Order Int String -> Property
+prop_insertAt_deleteAt v@(k, _) o =
+  forAll (choose (0, Foldable.length o)) $ \i ->
+  if Data.Order.member k o
+  then deleteAt i o == deleteAt i (insertPairAt i v (deleteAt i o))
+  else o == deleteAt i (insertPairAt i v o)
+-}
+
+-- | Use an explicit generator to create a valid list position.
+prop_insert_delete :: forall o v k. (Ordered o k v, Eq (o v), Eq v) => (k, v) -> o v -> Property
+prop_insert_delete (k, a) o =
+    forAll (choose (0, length o)) $ \i ->
+        member k o || (keyView k (insertPairAt i (k, a) o) == Just (i, a, o))
+
+prop_insert_delete_pos :: forall o v k. (Ordered o k v, Eq (o v)) => (k, v) -> o v -> Property
+prop_insert_delete_pos v@(k, _) o =
+    forAll (choose (0, length o)) $ \i ->
+        member k o || (deleteAt i (insertPairAt i v o) == o)
+
+prop_pos_insertAt :: forall o v k. (Ordered o k v, Enum k) => v -> o v -> Property
+prop_pos_insertAt v o =
+  forAll (choose (0, length o)) $ \n ->
+  let (o', k) = insertAt n v o in
+  pos k o' == Just n

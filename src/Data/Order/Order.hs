@@ -1,8 +1,7 @@
 {-# LANGUAGE DeriveGeneric, InstanceSigs, UndecidableInstances #-}
 
 module Data.Order.Order
-  ( Order(Order, _map, _vec)
-  , toPairs
+  ( MapAndVec
   , fromPairsUnsafe
   ) where
 
@@ -14,7 +13,7 @@ import qualified Data.EnumMap as EnumMap
 import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import qualified Data.ListLike as LL
-import Data.Order.One
+import Data.Order.One hiding ((!))
 import Data.SafeCopy (base, contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import qualified Data.Sequence as Seq
@@ -28,17 +27,17 @@ import GHC.Generics (Generic)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 import Test.QuickCheck
 
-data Order k v =
-  Order
-    { _map :: EnumMap k v
-    , _vec :: Vector k
+data MapAndVec k v =
+  MapAndVec
+    { _theMap :: EnumMap k v
+    , _theVec :: Vector k
     } deriving (Generic, Data, Typeable, Functor, Read)
 
-instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
+instance (Enum k, Ord k) => Sem.Semigroup (MapAndVec k v) where
     (<>) a b =
-      let m = EnumMap.union (_map a) (_map b)
-          v = Vector.filter (`EnumMap.member` m) (_vec a <> _vec b) in
-      Order m v
+      let m = EnumMap.union (_theMap a) (_theMap b)
+          v = Vector.filter (`EnumMap.member` m) (_theVec a <> _theVec b) in
+      MapAndVec m v
     -- ^ If there are any common @k@ values in the shared
     -- map the elements from the second is omitted.  For
     -- this reason it is suggested that, when in doubt,
@@ -47,18 +46,18 @@ instance (Enum k, Ord k) => Sem.Semigroup (Order k v) where
     --   mapKeys Left a <> mapKeys Right b
     -- @@
 
-instance (Enum k, Ord k) => Monoid (Order k v) where
-    mempty = Order mempty mempty
+instance (Enum k, Ord k) => Monoid (MapAndVec k v) where
+    mempty = MapAndVec mempty mempty
 #if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
 #endif
 
 -- Added 29 Aug 2020
-instance (Enum k, Ord k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Migrate (Order k v) where
-  type MigrateFrom (Order k v) = Order_2 k v
-  migrate (Order_2 m (UList v)) = Order m (Vector.fromList v)
+instance (Enum k, Ord k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Migrate (MapAndVec k v) where
+  type MigrateFrom (MapAndVec k v) = Order_2 k v
+  migrate (Order_2 m (UList v)) = MapAndVec m (Vector.fromList v)
 
-instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => SafeCopy (Order k v) where version = 3; kind = extension
+instance (Ord k, Enum k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => SafeCopy (MapAndVec k v) where version = 3; kind = extension
 
 data Order_2 k v =
   Order_2
@@ -91,125 +90,159 @@ instance (SafeCopy k, Typeable k, SafeCopy a, Typeable a) => SafeCopy (Order_1 k
     kind = base
     errorTypeName _ = "Order"
 
-instance (Enum k, Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
-    foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _map xs ! k)) r0 (_vec xs)
-    foldr f r0 xs = Foldable.foldr (\k r -> f (k, _map xs ! k) r) r0 (_vec xs)
+instance (Enum k, Ord k, Monoid (MapAndVec k v)) => LL.FoldableLL (MapAndVec k v) (k, v) where
+    foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _theMap xs ! k)) r0 (_theVec xs)
+    foldr f r0 xs = Foldable.foldr (\k r -> f (k, _theMap xs ! k) r) r0 (_theVec xs)
 
-instance SafeCopy (Order k v) => Serialize (Order k v) where
+instance SafeCopy (MapAndVec k v) => Serialize (MapAndVec k v) where
     put = safePut
     get = safeGet
 
-instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
-  show o = "fromPairs " <> show (toPairs o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
+instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (MapAndVec k v) where
+  show o = "fromPairs " <> show (pairs o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
 
-instance forall k v. (Ord k, Enum k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (Order k v) where
-  pPrint o = text "Order " <> pPrint (Vector.toList (toPairs o))
+instance forall k v. (Ord k, Enum k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (MapAndVec k v) where
+  pPrint o = text "Order " <> pPrint (pairs o)
 
 -- Fold over the values only
 -- @@
 -- λ> foldMap id (fromList [(1, "a"), (2, "b")])
 -- "ab"
 -- @@
-instance (Enum k, Ord k) => Foldable (Order k) where
-    foldMap f o = Foldable.foldMap (\k -> f (_map o ! k)) (_vec o)
-    null o = null (_vec o)
-    length o = length (_vec o)
+instance (Enum k, Ord k) => Foldable (MapAndVec k) where
+    foldMap f o = Foldable.foldMap (\k -> f (_theMap o ! k)) (_theVec o)
+    null o = null (_theVec o)
+    length o = length (_theVec o)
 
 -- Fold over keys and values
 -- @@
 -- λ> ifoldMap (\k v-> show k ++ v) (fromList [(2, "a"), (5, "b")])
 -- "2a5b"
 -- @@
-instance (Enum k, Ord k) => FoldableWithIndex k (Order k) where
-    ifoldMap f o = Foldable.foldMap (\k -> f k (_map o ! k)) (_vec o)
+instance (Enum k, Ord k) => FoldableWithIndex k (MapAndVec k) where
+    ifoldMap f o = Foldable.foldMap (\k -> f k (_theMap o ! k)) (_theVec o)
 
 -- @@
 -- λ> ifoldMap (\k v-> ListLike.concat (ListLike.replicate k v :: [String])) (fromPairsSafe (ListLike.fromList [(2, "a"), (5, "b")]))
 -- "aabbbbb"
 -- @@
-instance Enum k => FunctorWithIndex k (Order k) where
-    imap f o = Order (EnumMap.mapWithKey f (_map o)) (_vec o)
+instance Enum k => FunctorWithIndex k (MapAndVec k) where
+    imap f o = MapAndVec (EnumMap.mapWithKey f (_theMap o)) (_theVec o)
 
-toPairs :: forall k a. Enum k => Order k a -> Vector (k, a)
-toPairs o = fmap (\k -> (k, _map o ! k)) (_vec o :: Vector k)
-{-# DEPRECATED toPairs "Use pairs" #-}
-
-fromPairsUnsafe :: forall t k a. (Ord k, Enum k, Foldable t) => t (k, a) -> Order k a
+fromPairsUnsafe :: forall t k a. (Ord k, Enum k, Foldable t) => t (k, a) -> MapAndVec k a
 fromPairsUnsafe prs =
-  foldr (\(k, a) (Order m v) -> Order (EnumMap.insert k a m) (Vector.cons k v)) mempty prs
+  foldr (\(k, a) (MapAndVec m v) -> MapAndVec (EnumMap.insert k a m) (Vector.cons k v)) mempty prs
 {-# DEPRECATED fromPairsUnsafe "Use fromPairs" #-}
 
-instance (Ord k, Eq v) => Eq (Order k v) where
-  a == b = _map a == _map b && _vec a == _vec b
+instance (Ord k, Eq v) => Eq (MapAndVec k v) where
+  a == b = _theMap a == _theMap b && _theVec a == _theVec b
 
-instance (Enum k, Ord k, Eq v, Ord v) => Ord (Order k v) where
-    compare a b = compare (_vec a) (_vec b) <> compare (_map a) (_map b)
+instance (Enum k, Ord k, Eq v, Ord v) => Ord (MapAndVec k v) where
+    compare a b = compare (_theVec a) (_theVec b) <> compare (_theMap a) (_theMap b)
 
 -- @@
 -- λ> traverse (++ "!") (Data.Order.fromPairsUnsafe [('a', "1"),('b',"2")] :: Order Char String)
 -- [fromList [('a','1'),('b','2')], fromList [('a','1'),('b','!')],fromList [('a','!'),('b','2')],fromList [('a','!'),('b','!')]] :: [Order Char Char]
 -- @@
-instance (Enum k, Ord k) => Traversable (Order k) where
-    traverse f o = Order <$> traverse f (_map o) <*> pure (_vec o)
+instance (Enum k, Ord k) => Traversable (MapAndVec k) where
+    traverse f o = MapAndVec <$> traverse f (_theMap o) <*> pure (_theVec o)
 
-instance (Enum k, Ord k) => TraversableWithIndex k (Order k) where
-    itraverse f o = Order <$> itraverse (\k a -> f (toEnum k) a) (_map o) <*> pure (_vec o)
+instance (Enum k, Ord k) => TraversableWithIndex k (MapAndVec k) where
+    itraverse f o = MapAndVec <$> itraverse (\k a -> f (toEnum k) a) (_theMap o) <*> pure (_theVec o)
 
--- | An Order has two notions of an 'Index', the 'Int' index of the
+-- | An MapAndVec has two notions of an 'Index', the 'Int' index of the
 -- list and the @k@ index of the map.  Here is the 'Ixed' instance
--- for the latter, which only needs to address the _map field.
+-- for the latter, which only needs to address the _theMap field.
 -- @@
 -- λ> set (ix 'a') 30 (fromPairsUnsafe [('a',10),('b',20)])
--- fromPairsUnsafe [('a',30),('b',20)] :: Order (Char) (Integer)
+-- fromPairsUnsafe [('a',30),('b',20)] :: MapAndVec (Char) (Integer)
 -- @@
 
-type instance Index (Order k a) = k
-type instance IxValue (Order k a) = a
-instance Enum k => Ixed (Order k a) where
+type instance Index (MapAndVec k a) = k
+type instance IxValue (MapAndVec k a) = a
+instance Enum k => Ixed (MapAndVec k a) where
     ix k f o =
-        case EnumMap.lookup k (_map o) of
-          Just a -> fmap (\a' -> Order (EnumMap.insert k a' (_map o)) (_vec o)) (f a)
+        case EnumMap.lookup k (_theMap o) of
+          Just a -> fmap (\a' -> MapAndVec (EnumMap.insert k a' (_theMap o)) (_theVec o)) (f a)
           Nothing -> pure o
 
 -- | 'At' instance.
 -- @@
 -- λ> set (at 'a') Nothing (fromPairs [('a',10),('b',20)])
--- fromPairs [('b',20)] :: Order (Char) (Integer)
+-- fromPairs [('b',20)] :: MapAndVec (Char) (Integer)
 -- λ> set (at 'b') (Just 40) (fromPairs [('a',10),('b',20)])
--- fromPairs [('a',10),('b',40)] :: Order (Char) (Integer)
+-- fromPairs [('a',10),('b',40)] :: MapAndVec (Char) (Integer)
 -- @@
 -- New elements appear at the end (positions of existing elements do
 -- not change):
 -- @@
 -- λ> set (at 'x') (Just 30) (fromPairs [('a',10),('b',20)])
--- fromPairs [('a',10),('b',20),('x',30)] :: Order (Char) (Integer)
+-- fromPairs [('a',10),('b',20),('x',30)] :: MapAndVec (Char) (Integer)
 -- @@
-instance (Enum k, Eq k) => At (Order k a) where
+instance (Enum k, Eq k) => At (MapAndVec k a) where
     at k f o =
-        case EnumMap.lookup k (_map o) of
+        case EnumMap.lookup k (_theMap o) of
           Just a ->
-              fmap (maybe (Order (EnumMap.delete k (_map o)) (Vector.filter (/= k) (_vec o)))
-                          (\a' -> Order (EnumMap.insert k a' (_map o)) (_vec o)))
+              fmap (maybe (MapAndVec (EnumMap.delete k (_theMap o)) (Vector.filter (/= k) (_theVec o)))
+                          (\a' -> MapAndVec (EnumMap.insert k a' (_theMap o)) (_theVec o)))
                    (f (Just a))
           Nothing ->
               fmap (maybe o
-                          (\a' -> Order (EnumMap.insert k a' (_map o)) (_vec o <> Vector.singleton k)))
+                          (\a' -> MapAndVec (EnumMap.insert k a' (_theMap o)) (_theVec o <> Vector.singleton k)))
                    (f Nothing)
 
-instance (Ord k, Enum k) => One (Order k v) where
-  type OneItem (Order k v) = (k, v)
+instance (Ord k, Enum k) => One (MapAndVec k v) where
+  type OneItem (MapAndVec k v) = (k, v)
   one (k, v) = fromPairsUnsafe @[] [(k, v)]
 
-instance (Eq k, Ord k, Enum k) => Ordered (Order k) k v where
+instance (Eq k, Ord k, Enum k) => Ordered (MapAndVec k) k v where
   -- Override methods that could benefit from the At instance
   delete k o = set (at k) Nothing o
   -- we should also do good uncons, splitAt, and break implementations here
   fromPairs prs =
-    Order (EnumMap.fromList (fmap (over _1 fromEnum) prs)) (GHC.fromList (fmap fst prs))
+    MapAndVec (EnumMap.fromList (fmap (over _1 fromEnum) prs)) (GHC.fromList (fmap fst prs))
 
-instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
+instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (MapAndVec k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
       let ks' = LL.nub ks
       (vs :: [v]) <- vector (LL.length ks')
-      return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
+      return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: MapAndVec k v)
+
+newtype LL a = LL {unLL :: a} deriving (Eq, Ord)
+
+instance Monoid a => Monoid (LL a) where
+  mempty = LL mempty
+#if !(MIN_VERSION_base(4,11,0))
+  mappend = (<>)
+#endif
+
+instance Sem.Semigroup a => Sem.Semigroup (LL a) where
+  (<>) (LL a) (LL b) = LL (a <> b)
+
+-- A ListLike instance hidden inside the newtype LL.
+instance (Ord k, Enum k, LL.FoldableLL (LL (MapAndVec k v)) (k, v)) => LL.ListLike (LL (MapAndVec k v)) (k, v) where
+  singleton :: (k, v) -> LL (MapAndVec k v)
+  singleton = LL . one
+  null :: LL (MapAndVec k v) -> Bool
+  null = Foldable.null . unLL
+  uncons :: LL (MapAndVec k v) -> Maybe ((k, v), LL (MapAndVec k v))
+  uncons (LL o) = over (_Just . _2) LL (uncons o)
+
+  drop :: Int -> LL (MapAndVec k a) -> LL (MapAndVec k a)
+  drop n = LL . Data.Order.One.drop n . unLL
+
+  take :: Int -> LL (MapAndVec k a) -> LL (MapAndVec k a)
+  take n = LL . Data.Order.One.take n . unLL
+
+  splitAt :: Int -> LL (MapAndVec k a) -> (LL (MapAndVec k a), LL (MapAndVec k a))
+  splitAt n (LL o) = over _1 LL $ over _2 LL $ Data.Order.One.splitAt n o
+
+instance (Ord k, Enum k) => GHC.IsList (LL (MapAndVec k v)) where
+  type Item (LL (MapAndVec k v)) = (k, v)
+  fromList = LL . fromPairsUnsafe
+  toList = toPairList . unLL
+
+instance (Enum k, Ord k, Monoid (MapAndVec k v)) => LL.FoldableLL (LL (MapAndVec k v)) (k, v) where
+    foldl f r0 (LL xs) = Foldable.foldl (\r k -> f r (k, _theMap xs ! k)) r0 (_theVec xs)
+    foldr f r0 (LL xs) = Foldable.foldr (\k r -> f (k, _theMap xs ! k) r) r0 (_theVec xs)

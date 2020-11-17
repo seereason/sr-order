@@ -29,37 +29,24 @@ module Data.Order
   ( module Data.Order.Order
   , module Data.Order.One
   , module Data.Order.AssocList
+  , Order
   , tests
   ) where
 
-import Control.Lens hiding (uncons, view)
 import qualified Data.Foldable as Foldable
-import qualified Data.List as List (sortBy)
-import qualified Data.ListLike as ListLike
-import Data.EnumMap as EnumMap ((!), EnumMap)
-import qualified Data.EnumMap as EnumMap
-import Data.Foldable (foldr, length)
-import Data.List as List (nub)
-import qualified Data.ListLike as LL
-import Data.Maybe (isNothing)
+import Data.Int
 import Data.Monoid
 import Data.Order.AssocList
 import Data.Order.One
 import Data.Order.Order
-import Data.SafeCopy (SafeCopy(..), safeGet, safePut)
-import qualified Data.Semigroup as Sem
-import Data.Serialize (Serialize(..))
-import qualified Data.Set as Set (fromList, insert, member)
-import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
-import Data.Vector (Vector) -- hiding ((!), break, drop, dropWhile, foldr, fromList, head, length, null, sequence, singleton, take, toList)
-import qualified Data.Vector as Vector
-import Data.Word
-import Data.Int
 import Extra.QuickCheck
-import qualified GHC.Exts as GHC
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import Test.QuickCheck
-import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
+
+-- There are many values of this type with SafeCopy instances.  If you
+-- want to change this type alias you will need a migration to convert
+-- the exising MapAndVec values to your new type.
+type Order k = MapAndVec k
 
 type Key = Integer
 
@@ -67,6 +54,7 @@ data InsertPosition k v = InsertPosition (Order k v) Int deriving Show
 
 data ElementPosition o k v = ElementPosition (o v) (Maybe Int) deriving Show
 
+#if 0
 insertPairAtWith :: Enum k => (a -> a -> a) -> Int -> (k, a) -> Order k a -> Order k a
 insertPairAtWith f n (k, new) o =
   case EnumMap.lookup k (_map o) of
@@ -77,34 +65,6 @@ insertPairAtWith f n (k, new) o =
       Order
         (EnumMap.insertWith f k new (_map o))
         (uncurry (<>) $ over _2 (Vector.cons k) $ Vector.splitAt n (_vec o))
-
-{-
-filter :: Enum k => (k -> a -> Bool) -> Order k a -> Order k a
-filter f o = Order (EnumMap.filterWithKey f (_map o)) (Vector.filter (\k -> f k (_map o ! k)) (_vec o))
-
-partition :: Enum k => (k -> Bool) -> Order k a -> (Order k a, Order k a)
-partition f o =
-  let (m1, m2) = EnumMap.partitionWithKey (\k _ -> f k) (_map o)
-      (v1, v2) = Vector.partition f (_vec o) in
-  (Order m1 v1, Order m2 v2)
-
-break :: (Enum k, Ord k) => ((k, a) -> Bool) -> Order k a -> (Order k a, Order k a)
-break f o =
-  (Order mbefore before, Order mafter after)
-  where
-    f' k = f (k, _map o ! k)
-    (before, after) = Vector.break f' (_vec o)
-    beforeSet = foldr Set.insert mempty before
-    (mbefore, mafter) = EnumMap.partitionWithKey (\k _ -> Set.member k beforeSet) (_map o)
-
-splitAt :: (Enum k, Ord k) => Int -> Order k a -> (Order k a, Order k a)
-splitAt i o =
-  (Order mbefore before, Order mafter after)
-  where
-    (before, after) = Vector.splitAt i (_vec o)
-    beforeSet = foldr Set.insert mempty before
-    (mbefore, mafter) = EnumMap.partitionWithKey (\k _ -> Set.member k beforeSet) (_map o)
--}
 
 takeWhile :: (Enum k, Ord k) => ((k, a) -> Bool) -> Order k a -> Order k a
 takeWhile f o =
@@ -138,14 +98,6 @@ ilookup k o =
       Nothing -> Nothing
       Just a -> Just (Foldable.length (fst (ListLike.break (== k) (_vec o))), a)
 
--- | Like 'Data.Set.minView', if k is present returns the position,
--- associated value, and the order with that value removed.
-view :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a, Order k a)
-view k o =
-  case ilookup k o of
-    Just (i, a) -> Just (i, a, Order (EnumMap.delete k (_map o)) (ListLike.filter (/= k) (_vec o)))
-    Nothing -> Nothing
-
 member :: (Enum k) => k -> Order k v -> Bool
 member k o = EnumMap.member k (_map o)
 
@@ -160,44 +112,7 @@ vectorUncons x = if Vector.null x then Nothing else Just (Vector.head x, Vector.
 
 appendEnum :: (Enum k, Ord k) => v -> Order k v -> Order k v
 appendEnum v o = o <> one (next o, v)
-
-newtype LL a = LL {unLL :: a} deriving (Eq, Ord)
-
-instance Monoid a => Monoid (LL a) where
-  mempty = LL mempty
-#if !(MIN_VERSION_base(4,11,0))
-  mappend = (<>)
 #endif
-
-instance Sem.Semigroup a => Sem.Semigroup (LL a) where
-  (<>) (LL a) (LL b) = LL (a <> b)
-
--- A ListLike instance hidden inside the newtype LL.
-instance (Ord k, Enum k, LL.FoldableLL (LL (Order k v)) (k, v)) => LL.ListLike (LL (Order k v)) (k, v) where
-  singleton :: (k, v) -> LL (Order k v)
-  singleton = LL . one
-  null :: LL (Order k v) -> Bool
-  null = Foldable.null . unLL
-  uncons :: LL (Order k v) -> Maybe ((k, v), LL (Order k v))
-  uncons (LL o) = over (_Just . _2) LL (uncons o)
-
-  drop :: Int -> LL (Order k a) -> LL (Order k a)
-  drop n = LL . drop n . unLL
-
-  take :: Int -> LL (Order k a) -> LL (Order k a)
-  take n = LL . take n . unLL
-
-  splitAt :: Int -> LL (Order k a) -> (LL (Order k a), LL (Order k a))
-  splitAt n (LL o) = over _1 LL $ over _2 LL $ Data.Order.One.splitAt n o
-
-instance (Ord k, Enum k) => GHC.IsList (LL (Order k v)) where
-  type Item (LL (Order k v)) = (k, v)
-  fromList = LL . fromPairsUnsafe
-  toList = toPairList . unLL
-
-instance (Enum k, Ord k, Monoid (Order k v)) => LL.FoldableLL (LL (Order k v)) (k, v) where
-    foldl f r0 (LL xs) = Foldable.foldl (\r k -> f r (k, _map xs ! k)) r0 (_vec xs)
-    foldr f r0 (LL xs) = Foldable.foldr (\k r -> f (k, _map xs ! k) r) r0 (_vec xs)
 
 -- Quickcheck
 
@@ -214,51 +129,6 @@ instance (Ordered o k v, Arbitrary (o v), Arbitrary k, Arbitrary v) => Arbitrary
         0 -> return $ ElementPosition o Nothing
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
 
-prop_singleton :: (Key, Int) -> Bool
-prop_singleton pair = ListLike.uncons (ListLike.singleton pair) == Just (pair, LL (mempty :: Order Key Int))
-
--- | Map and list should contain the same keys with no duplicates
-prop_toPairs_fromPairs :: Order Int String -> Bool
-prop_toPairs_fromPairs o =
-    fromPairsUnsafe (toPairs o :: Vector (Int, String)) == o
-
-prop_delete :: Order Int String -> Property
-prop_delete o | Foldable.length o == 0 = property True
-prop_delete o =
-    forAll (choose (0, Foldable.length o - 1)) $ \i ->
-    Foldable.length (deleteAt i o) == Foldable.length o - 1
-
-prop_insertAt :: (Int, String) -> Order Int String -> Property
-prop_insertAt v@(k, _) o =
-    forAll (choose (0, Foldable.length o)) $ \i ->
-    Data.Order.member k o || (Foldable.length (insertPairAt i v o) == Foldable.length o + 1)
-
-{-
-prop_insertAt_deleteAt :: (Int, String) -> Order Int String -> Property
-prop_insertAt_deleteAt v@(k, _) o =
-  forAll (choose (0, Foldable.length o)) $ \i ->
-  if Data.Order.member k o
-  then deleteAt i o == deleteAt i (insertPairAt i v (deleteAt i o))
-  else o == deleteAt i (insertPairAt i v o)
--}
-
--- | Use an explicit generator to create a valid list position.
-prop_insert_delete :: (Int, String) -> Order Int String -> Property
-prop_insert_delete (k, a) o =
-    forAll (choose (0, Foldable.length o)) $ \i ->
-        Data.Order.member k o || (view k (insertPairAt i (k, a) o) == Just (i, a, o))
-
-prop_insert_delete_pos :: (Int, String) -> Order Int String -> Property
-prop_insert_delete_pos v@(k, _) o =
-    forAll (choose (0, Foldable.length o)) $ \i ->
-        Data.Order.member k o || (deleteAt i (insertPairAt i v o) == o)
-
-prop_pos_insertAt :: Char -> Order Char () -> Property
-prop_pos_insertAt c o =
-  forAll (choose (0, length o)) $ \n ->
-  let (o', k) = insertAt n () o in
-  pos k o' == Just n
-
 tests :: IO Result
 tests = do
   mconcat <$> sequence
@@ -271,13 +141,13 @@ tests = do
     , quickCheckResult $ withMaxSuccess 100 (prop_next @(Order Key) @String)
     , quickCheckResult $ withMaxSuccess 100 (prop_uncons @(Order Key) @String)
     , quickCheckResult $ withMaxSuccess 100 (prop_null @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 prop_singleton
-    , quickCheckResult $ withMaxSuccess 100 prop_toPairs_fromPairs
-    , quickCheckResult $ withMaxSuccess 100 prop_delete
-    , quickCheckResult $ withMaxSuccess 100 prop_insertAt
-    , quickCheckResult $ withMaxSuccess 100 prop_insert_delete
-    , quickCheckResult $ withMaxSuccess 100 prop_insert_delete_pos
+    , quickCheckResult $ withMaxSuccess 100 (prop_singleton @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_toPairs_fromPairs @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_delete @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_insertAt @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_insert_delete @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_insert_delete_pos @(Order Key) @String)
     , quickCheckResult $ withMaxSuccess 100 (prop_fromPairs @(Order Key) @String)
     , quickCheckResult $ withMaxSuccess 100 (prop_fromPairs @(AssocList Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 prop_pos_insertAt
+    , quickCheckResult $ withMaxSuccess 100 (prop_pos_insertAt @(Order Key) @())
     ] >>= throwResult
