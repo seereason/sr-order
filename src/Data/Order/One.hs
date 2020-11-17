@@ -45,15 +45,14 @@ module Data.Order.One
   , next
   , insertAt
   , append
-  , prop_pos_insertAt
   ) where
 
 import Data.EnumMap as EnumMap (fromList)
 import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
 import Data.Maybe (fromJust)
-import Data.Order.AssocList
-import Data.Order.Order
+--import Data.Order.AssocList
+--import Data.Order.Order
 import Data.Set as Set (insert, Set)
 import GHC.Exts as GHC (fromList)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
@@ -70,12 +69,6 @@ class One x where
 instance One [a] where
   type OneItem [a] = a
   one = (:[])
-
--- | This newtype can satisfy 'At (o k)' because its 'Index' is not
--- forced to be @Index [(k, a)] ~ Int@ as a list's is.
-instance One (AssocList k a) where
-  type OneItem (AssocList k a) = (k, a)
-  one (k, a) = AssocList [(k, a)]
 
 -- Ordered currently pinned to Order
 -- instance (Eq k, Ord k) => Ordered (AssocList k) k v
@@ -294,17 +287,6 @@ class (FoldableWithIndex (Index (o v)) o,
   append :: Enum k => o v -> v -> (o v, k)
   append o v = let k = next o in (o <> one (k, v), k)
 
-instance (Ord k, Enum k) => One (Order k v) where
-  type OneItem (Order k v) = (k, v)
-  one (k, v) = fromPairsUnsafe @[] [(k, v)]
-
-instance (Eq k, Ord k, Enum k) => Ordered (Order k) k v where
-  -- Override methods that could benefit from the At instance
-  delete k o = set (at k) Nothing o
-  -- we should also do good uncons, splitAt, and break implementations here
-  fromPairs prs =
-    Order (EnumMap.fromList (fmap (over _1 fromEnum) prs)) (GHC.fromList (fmap fst prs))
-
 overPairs ::
   forall o v k o' v' k'.
   (Ordered o k v, Ordered o' k' v')
@@ -348,9 +330,3 @@ instance One (Set UserId) where
   type OneItem (Set UserId) = (UserId, ())
   one = Set.singleton
 -}
-
-prop_pos_insertAt :: Char -> Order Char () -> Property
-prop_pos_insertAt c o =
-  forAll (choose (0, length o)) $ \n ->
-  let (o', k) = insertAt n () o in
-  pos k o' == Just n

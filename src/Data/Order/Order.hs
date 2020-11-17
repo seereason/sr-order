@@ -14,6 +14,7 @@ import qualified Data.EnumMap as EnumMap
 import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import qualified Data.ListLike as LL
+import Data.Order.One
 import Data.SafeCopy (base, contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import qualified Data.Sequence as Seq
@@ -22,7 +23,7 @@ import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.UList
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector
---import GHC.Exts as GHC (IsList(..))
+import GHC.Exts as GHC (IsList(..))
 import GHC.Generics (Generic)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 
@@ -193,3 +194,14 @@ instance (Enum k, Eq k) => At (Order k a) where
               fmap (maybe o
                           (\a' -> Order (EnumMap.insert k a' (_map o)) (_vec o <> Vector.singleton k)))
                    (f Nothing)
+
+instance (Ord k, Enum k) => One (Order k v) where
+  type OneItem (Order k v) = (k, v)
+  one (k, v) = fromPairsUnsafe @[] [(k, v)]
+
+instance (Eq k, Ord k, Enum k) => Ordered (Order k) k v where
+  -- Override methods that could benefit from the At instance
+  delete k o = set (at k) Nothing o
+  -- we should also do good uncons, splitAt, and break implementations here
+  fromPairs prs =
+    Order (EnumMap.fromList (fmap (over _1 fromEnum) prs)) (GHC.fromList (fmap fst prs))

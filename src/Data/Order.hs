@@ -38,7 +38,7 @@ import qualified Data.List as List (sortBy)
 import qualified Data.ListLike as ListLike
 import Data.EnumMap as EnumMap ((!), EnumMap)
 import qualified Data.EnumMap as EnumMap
-import Data.Foldable (foldr)
+import Data.Foldable (foldr, length)
 import Data.List as List (nub)
 import qualified Data.ListLike as LL
 import Data.Maybe (isNothing)
@@ -307,6 +307,12 @@ prop_insert_delete_pos :: (Int, String) -> Order Int String -> Property
 prop_insert_delete_pos v@(k, _) o =
     forAll (choose (0, Foldable.length o)) $ \i ->
         Data.Order.member k o || (deleteAt i (insertPairAt i v o) == o)
+
+prop_pos_insertAt :: Char -> Order Char () -> Property
+prop_pos_insertAt c o =
+  forAll (choose (0, length o)) $ \n ->
+  let (o', k) = insertAt n () o in
+  pos k o' == Just n
 
 tests :: IO Result
 tests = do

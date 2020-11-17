@@ -5,6 +5,7 @@
 module Data.Order.AssocList where
 
 import Control.Lens hiding (cons, uncons)
+import Data.Order.One
 import GHC.Generics (Generic)
 
 newtype AssocList k a = AssocList {_pairs :: [(k, a)]} deriving (Generic, Show)
@@ -50,3 +51,9 @@ instance FoldableWithIndex k (AssocList k) where
 
 deriving instance (Eq k, Eq v) => Eq (AssocList k v)
 deriving instance (Ord k, Ord v) => Ord (AssocList k v)
+
+-- | This newtype can satisfy 'At (o k)' because its 'Index' is not
+-- forced to be @Index [(k, a)] ~ Int@ as a list's is.
+instance One (AssocList k a) where
+  type OneItem (AssocList k a) = (k, a)
+  one (k, a) = AssocList [(k, a)]
