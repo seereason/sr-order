@@ -26,6 +26,7 @@ import qualified Data.Vector as Vector
 import GHC.Exts as GHC (IsList(..))
 import GHC.Generics (Generic)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
+import Test.QuickCheck
 
 data Order k v =
   Order
@@ -205,3 +206,10 @@ instance (Eq k, Ord k, Enum k) => Ordered (Order k) k v where
   -- we should also do good uncons, splitAt, and break implementations here
   fromPairs prs =
     Order (EnumMap.fromList (fmap (over _1 fromEnum) prs)) (GHC.fromList (fmap fst prs))
+
+instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
+  arbitrary = do
+      (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
+      let ks' = LL.nub ks
+      (vs :: [v]) <- vector (LL.length ks')
+      return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)

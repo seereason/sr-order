@@ -63,18 +63,9 @@ import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 
 type Key = Integer
 
-prop_fromPairs :: Order Key String -> Bool
-prop_fromPairs o = fromPairs (pairs o) == o
-
--- | Lookup key by position.  A lookup function appears in
--- containers in version 0.5.8.
-lookupKey :: (Ord k, Enum k) => Int -> Order k a -> Maybe k
-lookupKey i o | i < 0 || i >= Foldable.length (keys o) = Nothing
-lookupKey i o = Just (ListLike.index (keys o) i)
-
 data InsertPosition k v = InsertPosition (Order k v) Int deriving Show
 
-data ElementPosition k v = ElementPosition (Order k v) (Maybe Int) deriving Show
+data ElementPosition o k v = ElementPosition (o v) (Maybe Int) deriving Show
 
 insertPairAtWith :: Enum k => (a -> a -> a) -> Int -> (k, a) -> Order k a -> Order k a
 insertPairAtWith f n (k, new) o =
@@ -216,58 +207,12 @@ instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition 
       o <- arbitrary :: Gen (Order k v)
       InsertPosition o <$> choose (0, Foldable.length o)
 
-instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition k v) where
+instance (Ordered o k v, Arbitrary (o v), Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition o k v) where
   arbitrary = do
-      o <- arbitrary :: Gen (Order k v)
+      o <- arbitrary :: Gen (o v)
       case Foldable.length o of
         0 -> return $ ElementPosition o Nothing
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
-
-instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
-  arbitrary = do
-      (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
-      let ks' = nub ks
-      (vs :: [v]) <- vector (ListLike.length ks')
-      return (fromPairs (ListLike.zip ks' vs :: [(k, v)]) :: Order k v)
-
-prop_lookupKey :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
-prop_lookupKey (InsertPosition o i) a =
-    lookupKey i o' == Just k && lookupKey (Foldable.length o) o == Nothing
-    where o' = insertPairAt i (k, a) o
-          k = next o
-
--- If we insert (next o, a) into o at position i, we should then find a at
--- k in the new order and we should not find it in the original
--- order.
-prop_lookup :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
-prop_lookup (InsertPosition o i) a =
-    lookup k o' == Just a && lookup k o == Nothing
-    where o' = insertPairAt i (k, a) o
-          k = next o
-
-prop_lookupPair :: (k ~ Char, a ~ String) => InsertPosition k a -> a -> Bool
-prop_lookupPair (InsertPosition o i) a =
-    lookupPair i o' == Just (k, a) && lookupPair (Foldable.length o) o == Nothing
-    where o' = insertPairAt i (k, a) o
-          k = next o
-
-prop_keys :: Order Key String -> Bool
-prop_keys o = EnumMap.keysSet (_map o) == Set.fromList (Foldable.toList (_vec o))
-
-prop_splitAt :: (k ~ Char, a ~ String) => ElementPosition k a -> Bool
-prop_splitAt (ElementPosition o i) =
-    let (a, b) = ListLike.splitAt (maybe 0 id i) (LL o) in
-    o == unLL (a <> b)
-
-prop_next :: Order Key String -> Bool
-prop_next o = isNothing (ListLike.elemIndex (next o) (keys o))
-
-prop_uncons :: Order Key Int -> Bool
-prop_uncons o =
-   o == maybe mempty (\(pair, o') -> one pair <> o') (uncons o)
-
-prop_null :: Order Key Int -> Bool
-prop_null o = Foldable.null o == isNothing (ListLike.uncons (LL o))
 
 prop_singleton :: (Key, Int) -> Bool
 prop_singleton pair = ListLike.uncons (ListLike.singleton pair) == Just (pair, LL (mempty :: Order Key Int))
@@ -317,20 +262,22 @@ prop_pos_insertAt c o =
 tests :: IO Result
 tests = do
   mconcat <$> sequence
-    [ quickCheckResult $ withMaxSuccess 100 prop_keys
-    , quickCheckResult $ withMaxSuccess 100 prop_lookup
-    , quickCheckResult $ withMaxSuccess 100 prop_lookupKey
-    , quickCheckResult $ withMaxSuccess 100 prop_lookupPair
-    , quickCheckResult $ withMaxSuccess 100 prop_splitAt
-    , quickCheckResult $ withMaxSuccess 100 prop_next
-    , quickCheckResult $ withMaxSuccess 100 prop_uncons
-    , quickCheckResult $ withMaxSuccess 100 prop_null
+    [ quickCheckResult $ withMaxSuccess 100 (prop_keys @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_keys @(AssocList Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_lookup @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_lookupKey @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_lookupPair @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_splitAt @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_next @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_uncons @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_null @(Order Key) @String)
     , quickCheckResult $ withMaxSuccess 100 prop_singleton
     , quickCheckResult $ withMaxSuccess 100 prop_toPairs_fromPairs
     , quickCheckResult $ withMaxSuccess 100 prop_delete
     , quickCheckResult $ withMaxSuccess 100 prop_insertAt
     , quickCheckResult $ withMaxSuccess 100 prop_insert_delete
     , quickCheckResult $ withMaxSuccess 100 prop_insert_delete_pos
-    , quickCheckResult $ withMaxSuccess 100 prop_fromPairs
+    , quickCheckResult $ withMaxSuccess 100 (prop_fromPairs @(Order Key) @String)
+    , quickCheckResult $ withMaxSuccess 100 (prop_fromPairs @(AssocList Key) @String)
     , quickCheckResult $ withMaxSuccess 100 prop_pos_insertAt
     ] >>= throwResult

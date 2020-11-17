@@ -45,15 +45,25 @@ module Data.Order.One
   , next
   , insertAt
   , append
+  , lookupKey
+  , prop_fromPairs
+  , prop_keys
+  , prop_splitAt
+  , prop_next
+  , prop_lookupKey
+  , prop_lookup
+  , prop_lookupPair
+  , prop_uncons
+  , prop_null
   ) where
 
 import Data.EnumMap as EnumMap (fromList)
 import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isNothing)
 --import Data.Order.AssocList
 --import Data.Order.Order
-import Data.Set as Set (insert, Set)
+import Data.Set as Set (fromList, insert, Set)
 import GHC.Exts as GHC (fromList)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
@@ -99,6 +109,7 @@ class (FoldableWithIndex (Index (o v)) o,
        Ixed (o v),
        Index (o v) ~ k,
        IxValue (o v) ~ v,
+       At (o v),
        Monoid (o v),
        One (o v),
        OneItem (o v) ~ (k, v),
@@ -155,14 +166,16 @@ class (FoldableWithIndex (Index (o v)) o,
   lookup :: Index (o v) -> o v -> Maybe v
   lookup k = preview (ix k)
 
-  -- This could be more efficient with an At instance
   delete :: k -> o v -> o v
-  delete k o = filter (\_ k' _ -> k /= k') o
-  -- delete k o = set (at k) Nothing o
+  -- delete k o = filter (\_ k' _ -> k /= k') o
+  delete k o = set (at k) Nothing o
 
+  -- > fmap fst (uncons (fromPairs (fmap (,()) ([0..1000000] :: [Int])) :: AssocList Int ()))
+  -- Just (0,())
   uncons :: o v -> Maybe ((Index (o v), v), o v)
   uncons o | null o = Nothing
   uncons o =
+    -- use ifoldl' to avoid stack overflow
     maybe Nothing (\(k, v) -> Just ((k, v), delete k o)) $ ifoldl' f Nothing o
     where
       -- f :: Index (o v) -> Maybe (k, v) -> IxValue (o v) -> Maybe (k, v)
@@ -203,9 +216,9 @@ class (FoldableWithIndex (Index (o v)) o,
   -- filter f o = fst (partition f o)
   filter f o = snd $ ifoldr (\k v (n, o') -> (succ n, if f n k v then cons (k, v) o' else o')) (0, mempty) o
 
-  -- | Replace the current ordering with the given key list.  Duplicate
-  -- keys are ignored, missing keys are appended.  FIXME: should this be
-  -- a method?  The Order type might override this with some benefit.
+  -- | Replace the current ordering with the given key list.
+  -- Duplicate keys are ignored, missing keys are appended.  The Order
+  -- type might override this with some benefit.
   permute :: [k] -> o v -> o v
   permute neworder o =
     foldr (\k r -> maybe r (\v -> cons (k, v) r) (lookup k o)) mempty neworder'
@@ -220,6 +233,12 @@ class (FoldableWithIndex (Index (o v)) o,
       Just (pr, o') ->
         let (before, after) = splitAt (pred i) o' in
           (cons pr before, after)
+
+  take :: Int -> o v -> o v
+  take n = fst . splitAt n
+
+  drop :: Int -> o v -> o v
+  drop n = snd . splitAt n
 
   deleteAt :: Int -> o v -> o v
   deleteAt n o =
@@ -248,11 +267,10 @@ class (FoldableWithIndex (Index (o v)) o,
       Nothing -> insertPairAt n (k, new) o
       Just old -> set (at k) (Just (f old new)) o
 
-  take :: Int -> o v -> o v
-  take n = fst . splitAt n
-
-  drop :: Int -> o v -> o v
-  drop n = snd . splitAt n
+  insertAt :: Enum k => Int -> v -> o v -> (o v, k)
+  insertAt n a o =
+    (insertPairAt n (k, a) o, k)
+    where k = next o
 
   lookupPair :: Int -> o v -> Maybe (k, v)
   lookupPair n = fmap fst . uncons . take 1 . drop n
@@ -278,11 +296,6 @@ class (FoldableWithIndex (Index (o v)) o,
   -- Note that this will fail if one of the keys equals maxBound
   next :: Enum k => o v -> k
   next = foldr max (toEnum 0) . fmap succ . keys
-
-  insertAt :: Enum k => Int -> v -> o v -> (o v, k)
-  insertAt n a o =
-    (insertPairAt n (k, a) o, k)
-    where k = next o
 
   append :: Enum k => o v -> v -> (o v, k)
   append o v = let k = next o in (o <> one (k, v), k)
@@ -330,3 +343,54 @@ instance One (Set UserId) where
   type OneItem (Set UserId) = (UserId, ())
   one = Set.singleton
 -}
+
+-- | Lookup key by position.  A lookup function appears in
+-- containers in version 0.5.8.
+lookupKey :: Ordered o k v => Int -> o v -> Maybe k
+lookupKey i o = fmap fst (lookupPair i o)
+
+prop_fromPairs :: forall o v k. (Ordered o k v, Eq (o v), Eq k, Ord k, Enum k, Eq v) => o v -> Bool
+prop_fromPairs o = fromPairs (pairs o) == o
+
+prop_keys :: forall o v k. (Ordered o (Index (o v)) v, k ~ Index (o v)) => o v -> Bool
+prop_keys o = keysSet o == Set.fromList (keys o)
+
+prop_splitAt :: forall o v k. (Ordered o k v, k ~ Index (o v), Eq (o v)) => o v -> Property
+prop_splitAt o =
+  forAll (choose (0, length o)) $ \i ->
+  let (a, b) = Data.Order.One.splitAt i o in
+    o == (a <> b)
+
+prop_next :: forall o v k. (Ordered o k v, Enum k) => o v -> Bool
+prop_next o = isNothing (pos (next o) o)
+
+prop_lookupKey :: forall o v k. (Ordered o k v, Arbitrary (o v), Enum k) => o v -> v -> Property
+prop_lookupKey o a =
+  forAll (choose (0, length o)) $ \i ->
+  let o' :: o v
+      o' = insertPairAt i (k, a) o
+      k = next o in
+  lookupKey i o' == Just k && lookupKey (length o) o == Nothing
+
+-- If we insert (next o, a) into o at position i, we should then find a at
+-- k in the new order and we should not find it in the original
+-- order.
+prop_lookup :: forall o v k. (Ordered o k v, Arbitrary (o v), Enum k, Eq v) => o v -> v -> Property
+prop_lookup o v =
+  forAll (choose (0, length o)) $ \i ->
+  let o' = insertPairAt i (k, v) o
+      k = next o in
+    lookup k o' == Just v && lookup k o == Nothing
+
+prop_lookupPair :: forall o v k. (Ordered o k v, Eq (o v), Enum k, Eq v) => o v -> v -> Property
+prop_lookupPair o a =
+  forAll (choose (0, length o - 1)) $ \i ->
+  let o' = insertPairAt i (k, a) o
+      k = next o in
+  lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
+
+prop_uncons :: forall o v k. (Ordered o k v, Eq (o v), Enum k, Eq v) => o v -> Bool
+prop_uncons o = o == maybe mempty (\(pair, o') -> one pair <> o') (uncons o)
+
+prop_null :: forall o v k. Ordered o k v => o v -> Bool
+prop_null o = null o == isNothing (uncons o)

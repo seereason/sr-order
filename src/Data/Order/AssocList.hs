@@ -6,7 +6,11 @@ module Data.Order.AssocList where
 
 import Control.Lens hiding (cons, uncons)
 import Data.Order.One
+import Data.Set as Set (fromList)
+import Data.List (sortBy)
 import GHC.Generics (Generic)
+import qualified Data.ListLike as LL
+import Test.QuickCheck
 
 newtype AssocList k a = AssocList {_pairs :: [(k, a)]} deriving (Generic, Show)
 
@@ -57,3 +61,47 @@ deriving instance (Ord k, Ord v) => Ord (AssocList k v)
 instance One (AssocList k a) where
   type OneItem (AssocList k a) = (k, a)
   one (k, a) = AssocList [(k, a)]
+
+instance (Eq k, Ord k) => Ordered (AssocList k) k v where
+  pairs = _pairs
+  fromPairs = AssocList
+  -- keys - Use default implementation for correct order
+  keysSet = Set.fromList . keys
+  -- values - Use default implementation for correct order
+  -- member - default
+  -- pos - default
+  -- singleton - default
+  -- cons - default (assuming (a : v) is same as [a] <> v
+  -- lookup - default
+  -- delete - default
+  -- This implementation works with infinite lists
+  uncons (AssocList ((k, v) : more)) = Just ((k, v), AssocList more)
+  uncons (AssocList []) = Nothing
+  break f (AssocList prs) =
+    let (before, after) = Prelude.break f prs in
+      (AssocList before, AssocList after)
+  -- takeWhile - default
+  -- dropWhile - default
+  -- partition - default
+  -- filter -- default
+  -- permute -- could benefit from a reimplementation
+  splitAt n (AssocList prs) =
+    let (before, after) = Prelude.splitAt n prs in
+      (AssocList before, AssocList after)
+  -- deleteAt - default
+  -- insertPairAt - default
+  -- insertPairAtWith - default
+  -- take - default
+  -- drop - default
+  -- lookupPair - default
+  sortBy cmp (AssocList prs) = AssocList (Data.List.sortBy cmp prs)
+  -- next - default
+  -- insertAt - default
+  -- append -- default
+
+instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (AssocList k v) where
+  arbitrary = do
+      (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
+      let ks' = LL.nub ks
+      (vs :: [v]) <- vector (LL.length ks')
+      return (AssocList (LL.zip ks' vs))
