@@ -98,7 +98,7 @@ instance SafeCopy (Order k v) => Serialize (Order k v) where
     get = safeGet
 
 instance forall k v. (Ord k, Enum k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
-  show o = "fromPairsUnsafe " <> show (toPairs o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
+  show o = "fromPairs " <> show (toPairs o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
 
 instance forall k v. (Ord k, Enum k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (Order k v) where
   pPrint o = text "Order " <> pPrint (Vector.toList (toPairs o))

@@ -31,46 +31,6 @@ module Data.Order
   , module Data.Order.AssocList
   , tests
   ) where
-{-
-    ( Order(_map, _vec)
-    , toPairList
-    , fromPairsUnsafe
-    , fromPairs
-    , overPairs
-    , ioverPairs
-    -- * module Data.Order.One
-    , IndexedOrder, pairs, keys, keysSet, values, pos
-    , AList
-    , AssocList(..)
-    , One(OneItem, one)
-    , delete
-    , singleton
-    , lookup
-    , partition
-    , filter
-    -- , splitAt, take, drop
-    -- * Operators
-    , ilookup, view
-    , next, Data.Order.mapKeys
-    , Data.Order.member, permute, permuteUnsafe
-    , sortBy, appendEnum
-    -- * Positional operations
-    , lookupKey, lookupPair
-    , insertPairAt, insertPairAtWith
-    , deleteAt
-    , appendPair, appendElem
-    , prependPair, prependElem
-    , Data.Order.takeWhile
-    -- * Is/Has classes and instances
-{-
-    , IsMap(..)
-    , HasMap(..)
-    , IsOrder(..)
-    , HasOrder(..)
--}
-    , tests
-    ) where
--}
 
 import Control.Lens hiding (uncons, view)
 import qualified Data.Foldable as Foldable

@@ -48,12 +48,14 @@ module Data.Order.One
   , prop_pos_insertAt
   ) where
 
+import Data.EnumMap as EnumMap (fromList)
 import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
 import Data.Maybe (fromJust)
 import Data.Order.AssocList
 import Data.Order.Order
 import Data.Set as Set (insert, Set)
+import GHC.Exts as GHC (fromList)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
 
@@ -107,8 +109,7 @@ class (FoldableWithIndex (Index (o v)) o,
        Monoid (o v),
        One (o v),
        OneItem (o v) ~ (k, v),
-       Eq k, Ord k,
-       o ~ Order k
+       Eq k, Ord k
       ) => Ordered o k v where
 
   -- | Return the key value pairs in order.
@@ -143,7 +144,7 @@ class (FoldableWithIndex (Index (o v)) o,
   pos :: k -> o v -> Maybe Int
   pos k o = go 0 o
     where
-      go :: Int -> Order k v -> Maybe Int
+      go :: Int -> o v -> Maybe Int
       go n o =
         case uncons o of
           Nothing -> Nothing
@@ -301,6 +302,8 @@ instance (Eq k, Ord k, Enum k) => Ordered (Order k) k v where
   -- Override methods that could benefit from the At instance
   delete k o = set (at k) Nothing o
   -- we should also do good uncons, splitAt, and break implementations here
+  fromPairs prs =
+    Order (EnumMap.fromList (fmap (over _1 fromEnum) prs)) (GHC.fromList (fmap fst prs))
 
 overPairs ::
   forall o v k o' v' k'.
