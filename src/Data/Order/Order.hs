@@ -2,7 +2,6 @@
 
 module Data.Order.Order
   ( MapAndVec
-  , fromPairsUnsafe
   ) where
 
 -- import Control.Lens (_1, _2, over)
@@ -52,7 +51,7 @@ instance (Enum k, Ord k) => Monoid (MapAndVec k v) where
     mappend = (<>)
 #endif
 
--- Added 29 Aug 2020
+-- Added 29 Aug 2020 (name changed from Order to MapAndVec on 17 Nov 2020)
 instance (Enum k, Ord k, SafeCopy k, Typeable k, SafeCopy v, Typeable v) => Migrate (MapAndVec k v) where
   type MigrateFrom (MapAndVec k v) = Order_2 k v
   migrate (Order_2 m (UList v)) = MapAndVec m (Vector.fromList v)

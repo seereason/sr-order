@@ -39,14 +39,30 @@ import Data.Monoid
 import Data.Order.AssocList
 import Data.Order.One
 import Data.Order.Order
+import Data.SafeCopy (extension, SafeCopy(..))
 import Extra.QuickCheck
+import Data.SafeCopy (Migrate(..), SafeCopy')
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import Test.QuickCheck
 
--- There are many values of this type with SafeCopy instances.  If you
--- want to change this type alias you will need a migration to convert
--- the exising MapAndVec values to your new type.
+#if 1
 type Order k = MapAndVec k
+#else
+-- DANGER - if you uncomment this all your Orders will be converted to
+-- AssocLists, and you can't reverse this without adding more
+-- migrations and safecopy instances.  (Or re-syncing the database.)
+--
+-- I did try this change and it worked, but it did not seem to help in
+-- any way.  It may have been somewhat slower.
+
+type Order k = AssocList k
+
+instance (SafeCopy' k, Ord k, Enum k, SafeCopy' v) => SafeCopy (AssocList k v) where version = 4; kind = extension
+
+instance (Ord k, Enum k, SafeCopy' k, SafeCopy' v) => Migrate (AssocList k v) where
+  type MigrateFrom (AssocList k v) = MapAndVec k v
+  migrate = AssocList . pairs
+#endif
 
 type Key = Integer
 

@@ -5,14 +5,19 @@
 module Data.Order.AssocList where
 
 import Control.Lens hiding (cons, uncons)
+import Data.Data (Data)
 import Data.Order.One
 import Data.Set as Set (fromList)
+import Data.Serialize (Serialize)
 import Data.List (sortBy)
+import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import qualified Data.ListLike as LL
 import Test.QuickCheck
 
-newtype AssocList k a = AssocList {_pairs :: [(k, a)]} deriving (Generic, Show)
+newtype AssocList k a =
+  AssocList {_pairs :: [(k, a)]}
+  deriving (Typeable, Generic, Show, Serialize, Functor, Read, Data)
 
 instance Monoid (AssocList k a) where
   mappend = (<>)
@@ -52,6 +57,22 @@ instance Foldable (AssocList k) where
 instance FoldableWithIndex k (AssocList k) where
   ifoldMap :: forall a r. Monoid r => (k -> a -> r) -> AssocList k a -> r
   ifoldMap f (AssocList o) = foldMap (uncurry f) o
+
+instance Enum k => FunctorWithIndex k (AssocList k) where
+    imap f (AssocList prs) = AssocList (fmap (\(k, a) -> (k, f k a)) prs)
+
+instance (Enum k, Ord k) => Traversable (AssocList k) where
+  traverse f (AssocList prs) = AssocList <$> go prs
+    where go ((k, a) : more) = (:) <$> ((k,) <$> f a) <*> go more
+          go [] = pure []
+
+-- The TraversableWithIndex instance for [(k, a)] has an Int for the
+-- index and (k, a) for the values.  That is not what we want here,
+-- we want the index to be k and the value to be a.
+instance (Enum k, Ord k) => TraversableWithIndex k (AssocList k) where
+  itraverse f (AssocList prs) = AssocList <$> go prs
+    where go ((k, a) : more) = (:) <$> ((k,) <$> f k a) <*> go more
+          go [] = pure []
 
 deriving instance (Eq k, Eq v) => Eq (AssocList k v)
 deriving instance (Ord k, Ord v) => Ord (AssocList k v)
