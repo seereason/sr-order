@@ -366,4 +366,5 @@ tests = do
     , quickCheckResult $ withMaxSuccess 100 prop_insert_delete
     , quickCheckResult $ withMaxSuccess 100 prop_insert_delete_pos
     , quickCheckResult $ withMaxSuccess 100 prop_fromPairs
+    , quickCheckResult $ withMaxSuccess 100 prop_pos_insertAt
     ] >>= throwResult

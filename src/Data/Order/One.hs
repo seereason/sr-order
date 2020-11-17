@@ -45,6 +45,7 @@ module Data.Order.One
   , next
   , insertAt
   , append
+  , prop_pos_insertAt
   ) where
 
 import Control.Lens hiding (cons, Indexed, uncons)
@@ -54,6 +55,7 @@ import Data.Order.AssocList
 import Data.Order.Order
 import Data.Set as Set (insert, Set)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
+import Test.QuickCheck
 
 -- | Copied from relude
 class One x where
@@ -113,6 +115,8 @@ class (FoldableWithIndex (Index (o v)) o,
   pairs :: o v -> [(k, v)]
   pairs o = ifoldr (\k v r -> (k, v) : r) [] o
 
+  -- FIXME: this is incredibly slow: pos 3 (fromPairs (fmap (,()) [0..10000]))
+  -- Could this be lazy?  Depends on the semigroup instance I guess.
   fromPairs :: [(k, v)] -> o v
   fromPairs [] = mempty
   fromPairs ((k, v) : more) = one (k, v) <> fromPairs more
@@ -131,19 +135,20 @@ class (FoldableWithIndex (Index (o v)) o,
   member :: Index (o v) -> o v -> Bool
   member k o = has (ix k) o
 
-  -- | Use ifoldr rather than ifoldr' so that long lists get short circuited:
+  -- | Use ifoldl rather than ifoldl' so that long lists get short circuited:
   -- % foldr' (\a r -> a == 10 || r) False [1..]
   -- C-c C-cInterrupted.
   -- % foldr (\a r -> a == 10 || r) False [1..]
   -- True
   pos :: k -> o v -> Maybe Int
-  pos k o =
-    either Just (const Nothing) $
-      ifoldr (\k' _ (r :: Either Int Int) ->
-                 either
-                   (\i -> if k == k' then Right i else Left (succ i))
-                   Right
-                   r) (Left 0) o
+  pos k o = go 0 o
+    where
+      go :: Int -> Order k v -> Maybe Int
+      go n o =
+        case uncons o of
+          Nothing -> Nothing
+          Just ((k', v), o') ->
+            if k == k' then Just n else go (succ n) o'
 
   singleton :: k ~ Index (o v) => k -> v -> o v
   singleton k v = one (k, v)
@@ -340,3 +345,9 @@ instance One (Set UserId) where
   type OneItem (Set UserId) = (UserId, ())
   one = Set.singleton
 -}
+
+prop_pos_insertAt :: Char -> Order Char () -> Property
+prop_pos_insertAt c o =
+  forAll (choose (0, length o)) $ \n ->
+  let (o', k) = insertAt n () o in
+  pos k o' == Just n
