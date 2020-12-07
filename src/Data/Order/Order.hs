@@ -34,8 +34,13 @@ data MapAndVec k v =
 
 instance (Enum k, Ord k) => Sem.Semigroup (MapAndVec k v) where
     (<>) a b =
-      let m = EnumMap.union (_theMap a) (_theMap b)
-          v = Vector.filter (`EnumMap.member` m) (_theVec a <> _theVec b) in
+      -- If b contains keys already in a they must be removed.
+      -- Arguably, the values of matching keys are supposed to match.
+      -- This Semigroup is not really that great, I should probably
+      -- remove it, or create some newtypes for different
+      -- interpretations.
+      let v = _theVec a <> Vector.filter (\x -> EnumMap.notMember x (_theMap a)) (_theVec b)
+          m = EnumMap.union (_theMap b) (_theMap a) in -- prefer the values in b
       MapAndVec m v
     -- ^ If there are any common @k@ values in the shared
     -- map the elements from the second is omitted.  For
