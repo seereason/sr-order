@@ -213,7 +213,7 @@ instance (Enum k, Eq k) => At (MapAndVec k a) where
                    (f (Just a))
           Nothing ->
               fmap (maybe o
-                          (\a' -> MapAndVec (EnumMap.insert k a' (_theMap o)) (_theVec o <> Vector.singleton k)))
+                          (\a' -> MapAndVec (EnumMap.insert k a' (_theMap o)) (Vector.singleton k <> _theVec o)))
                    (f Nothing)
 
 instance (Ord k, Enum k) => One (MapAndVec k v) where
