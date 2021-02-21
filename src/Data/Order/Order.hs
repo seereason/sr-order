@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, InstanceSigs, UndecidableInstances #-}
+{-# LANGUAGE CPP, DeriveGeneric, InstanceSigs, UndecidableInstances #-}
 
 module Data.Order.Order
   ( MapAndVec
@@ -26,6 +26,61 @@ import GHC.Generics (Generic)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 import Test.QuickCheck
 
+-- | The primary instance of 'Ordered', the 'MapAndVec' type is
+-- similar to an association list, a combination of a 'Vector' and a
+-- 'Map'.
+--
+-- 'MapAndVec' has two notions of an 'Index', the 'Int' index of the
+-- list and the @k@ index of the map.  Here is the 'Ixed' instance
+-- for the latter, which only needs to address the '_theMap' field.
+--
+-- @
+-- λ> set (ix 'a') 30 (fromPairsUnsafe [('a',10),('b',20)])
+-- fromPairsUnsafe [('a',30),('b',20)] :: MapAndVec (Char) (Integer)
+-- @
+--
+-- 'MapAndVec' has a fairly large number of other handy instances, for
+-- example:
+--
+-- 'Foldable', which folds over the values only
+--
+-- @
+-- λ> foldMap id (fromList [(1, "a"), (2, "b")])
+-- "ab"
+-- @
+--
+-- 'FoldableWithIndex', which folds over keys and values
+--
+-- @
+-- λ> ifoldMap (\\k v-> show k ++ v) (fromList [(2, "a"), (5, "b")])
+-- "2a5b"
+-- λ> ifoldMap (\\k v-> ListLike.concat (ListLike.replicate k v :: [String])) (fromPairsSafe (ListLike.fromList [(2, "a"), (5, "b")]))
+-- "aabbbbb"
+-- @
+--
+-- 'Traversable':
+--
+-- @
+-- λ> traverse (++ "!") (Data.Order.fromPairsUnsafe [('a', "1"),('b',"2")] :: Order Char String)
+-- [fromList [('a','1'),('b','2')], fromList [('a','1'),('b','!')],fromList [('a','!'),('b','2')],fromList [('a','!'),('b','!')]] :: [Order Char Char]
+-- @
+--
+-- 'At':
+--
+-- @
+-- λ> set (at 'a') Nothing (fromPairs [('a',10),('b',20)])
+-- fromPairs [('b',20)] :: MapAndVec (Char) (Integer)
+-- λ> set (at 'b') (Just 40) (fromPairs [('a',10),('b',20)])
+-- fromPairs [('a',10),('b',40)] :: MapAndVec (Char) (Integer)
+-- @
+--
+-- New elements appear at the end (positions of existing elements do
+-- not change):
+--
+-- @
+-- λ> set (at 'x') (Just 30) (fromPairs [('a',10),('b',20)])
+-- fromPairs [('a',10),('b',20),('x',30)] :: MapAndVec (Char) (Integer)
+-- @
 data MapAndVec k v =
   MapAndVec
     { _theMap :: EnumMap k v
@@ -118,18 +173,9 @@ instance (Enum k, Ord k) => Foldable (MapAndVec k) where
     null o = null (_theVec o)
     length o = length (_theVec o)
 
--- Fold over keys and values
--- @@
--- λ> ifoldMap (\k v-> show k ++ v) (fromList [(2, "a"), (5, "b")])
--- "2a5b"
--- @@
 instance (Enum k, Ord k) => FoldableWithIndex k (MapAndVec k) where
     ifoldMap f o = Foldable.foldMap (\k -> f k (_theMap o ! k)) (_theVec o)
 
--- @@
--- λ> ifoldMap (\k v-> ListLike.concat (ListLike.replicate k v :: [String])) (fromPairsSafe (ListLike.fromList [(2, "a"), (5, "b")]))
--- "aabbbbb"
--- @@
 instance Enum k => FunctorWithIndex k (MapAndVec k) where
     imap f o = MapAndVec (EnumMap.mapWithKey f (_theMap o)) (_theVec o)
 
@@ -144,23 +190,11 @@ instance (Ord k, Eq v) => Eq (MapAndVec k v) where
 instance (Enum k, Ord k, Eq v, Ord v) => Ord (MapAndVec k v) where
     compare a b = compare (_theVec a) (_theVec b) <> compare (_theMap a) (_theMap b)
 
--- @@
--- λ> traverse (++ "!") (Data.Order.fromPairsUnsafe [('a', "1"),('b',"2")] :: Order Char String)
--- [fromList [('a','1'),('b','2')], fromList [('a','1'),('b','!')],fromList [('a','!'),('b','2')],fromList [('a','!'),('b','!')]] :: [Order Char Char]
--- @@
 instance (Enum k, Ord k) => Traversable (MapAndVec k) where
     traverse f o = MapAndVec <$> traverse f (_theMap o) <*> pure (_theVec o)
 
 instance (Enum k, Ord k) => TraversableWithIndex k (MapAndVec k) where
     itraverse f o = MapAndVec <$> itraverse (\k a -> f (toEnum k) a) (_theMap o) <*> pure (_theVec o)
-
--- | An MapAndVec has two notions of an 'Index', the 'Int' index of the
--- list and the @k@ index of the map.  Here is the 'Ixed' instance
--- for the latter, which only needs to address the _theMap field.
--- @@
--- λ> set (ix 'a') 30 (fromPairsUnsafe [('a',10),('b',20)])
--- fromPairsUnsafe [('a',30),('b',20)] :: MapAndVec (Char) (Integer)
--- @@
 
 type instance Index (MapAndVec k a) = k
 type instance IxValue (MapAndVec k a) = a
@@ -170,19 +204,6 @@ instance Enum k => Ixed (MapAndVec k a) where
           Just a -> fmap (\a' -> MapAndVec (EnumMap.insert k a' (_theMap o)) (_theVec o)) (f a)
           Nothing -> pure o
 
--- | 'At' instance.
--- @@
--- λ> set (at 'a') Nothing (fromPairs [('a',10),('b',20)])
--- fromPairs [('b',20)] :: MapAndVec (Char) (Integer)
--- λ> set (at 'b') (Just 40) (fromPairs [('a',10),('b',20)])
--- fromPairs [('a',10),('b',40)] :: MapAndVec (Char) (Integer)
--- @@
--- New elements appear at the end (positions of existing elements do
--- not change):
--- @@
--- λ> set (at 'x') (Just 30) (fromPairs [('a',10),('b',20)])
--- fromPairs [('a',10),('b',20),('x',30)] :: MapAndVec (Char) (Integer)
--- @@
 instance (Enum k, Eq k) => At (MapAndVec k a) where
     at k f o =
         case EnumMap.lookup k (_theMap o) of
@@ -224,7 +245,7 @@ instance Monoid a => Monoid (LL a) where
 instance Sem.Semigroup a => Sem.Semigroup (LL a) where
   (<>) (LL a) (LL b) = LL (a <> b)
 
--- A ListLike instance hidden inside the newtype LL.
+-- | A ListLike instance hidden inside the newtype LL.
 instance (Ord k, Enum k, LL.FoldableLL (LL (MapAndVec k v)) (k, v)) => LL.ListLike (LL (MapAndVec k v)) (k, v) where
   singleton :: (k, v) -> LL (MapAndVec k v)
   singleton = LL . one

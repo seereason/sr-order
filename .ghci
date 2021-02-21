@@ -1,0 +1,19 @@
+:set -isrc
+:set -XConstraintKinds
+:set -XDeriveAnyClass
+:set -XDeriveDataTypeable
+:set -XDeriveFunctor
+:set -XDeriveGeneric
+:set -XFlexibleContexts
+:set -XFlexibleInstances
+:set -XInstanceSigs
+:set -XMultiParamTypeClasses
+:set -XRankNTypes
+:set -XScopedTypeVariables
+:set -XStandaloneDeriving
+:set -XTemplateHaskell
+:set -XTupleSections
+:set -XTypeApplications
+:set -XTypeFamilies
+:set -XUndecidableInstances
+
