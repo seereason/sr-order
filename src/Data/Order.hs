@@ -39,9 +39,7 @@ import Data.Monoid
 import Data.Order.AssocList
 import Data.Order.One
 import Data.Order.Order
-import Data.SafeCopy (extension, SafeCopy(..))
 import Extra.QuickCheck
-import Data.SafeCopy (Migrate(..), SafeCopy')
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import Test.QuickCheck
 
@@ -57,9 +55,9 @@ type Order k = MapAndVec k
 
 type Order k = AssocList k
 
-instance (SafeCopy' k, Ord k, Enum k, SafeCopy' v) => SafeCopy (AssocList k v) where version = 4; kind = extension
+instance (SafeCopy k, Ord k, Enum k, SafeCopy v) => SafeCopy (AssocList k v) where version = 4; kind = extension
 
-instance (Ord k, Enum k, SafeCopy' k, SafeCopy' v) => Migrate (AssocList k v) where
+instance (Ord k, Enum k, SafeCopy k, SafeCopy v) => Migrate (AssocList k v) where
   type MigrateFrom (AssocList k v) = MapAndVec k v
   migrate = AssocList . pairs
 #endif
@@ -69,66 +67,6 @@ type Key = Integer
 data InsertPosition k v = InsertPosition (Order k v) Int deriving Show
 
 data ElementPosition o k v = ElementPosition (o v) (Maybe Int) deriving Show
-
-#if 0
-insertPairAtWith :: Enum k => (a -> a -> a) -> Int -> (k, a) -> Order k a -> Order k a
-insertPairAtWith f n (k, new) o =
-  case EnumMap.lookup k (_map o) of
-    Nothing ->
-      let (a, b) = Vector.splitAt n (_vec o) in
-      Order (EnumMap.insert k new (_map o)) (a <> Vector.singleton k <> b)
-    Just _old ->
-      Order
-        (EnumMap.insertWith f k new (_map o))
-        (uncurry (<>) $ over _2 (Vector.cons k) $ Vector.splitAt n (_vec o))
-
-takeWhile :: (Enum k, Ord k) => ((k, a) -> Bool) -> Order k a -> Order k a
-takeWhile f o =
-  Order mbefore before
-  where
-    f' k = f (k, _map o ! k)
-    before = Vector.takeWhile f' (_vec o)
-    beforeSet = foldr Set.insert mempty before
-    mbefore = EnumMap.filterWithKey (\k _ -> Set.member k beforeSet) (_map o)
-
-appendPair :: (Enum k, Ord k) => Order k a -> (k, a) -> Order k a
-appendPair m (k, a) = m <> one (k, a)
-
-appendElem :: (Enum k, Ord k) => Order k a -> a -> (Order k a, k)
-appendElem o a = let k = next o in (appendPair o (k, a), k)
-
-prependPair :: (Enum k, Ord k) => (k, a) -> Order k a -> Order k a
-prependPair (k, a) o = one (k, a) <> o
-
-prependElem :: (Enum k, Ord k) => a -> Order k a -> (Order k a, k)
-prependElem a o = let k = next o in (prependPair (k, a) o, k)
-
--- | Based on Data.Map.mapKeys, because Vector is not a functor we
--- need to eliminate pairs when two k1 are mapped to the same k2.
-mapKeys :: (Enum k1, Enum k2) => (k1 -> k2) -> Order k1 a -> Order k2 a
-mapKeys f o = Order (EnumMap.mapKeys f (_map o)) (fmap f (_vec o))
-
-ilookup :: (Enum k, Ord k) => k -> Order k a -> Maybe (Int, a)
-ilookup k o =
-    case EnumMap.lookup k (_map o) of
-      Nothing -> Nothing
-      Just a -> Just (Foldable.length (fst (ListLike.break (== k) (_vec o))), a)
-
-member :: (Enum k) => k -> Order k v -> Bool
-member k o = EnumMap.member k (_map o)
-
-sortBy :: forall k v. Enum k => ((k, v) -> (k, v) -> Ordering) -> Order k v -> Order k v
-sortBy cmp o = Order (_map o) (Vector.fromList $ List.sortBy cmp' $ Vector.toList $ _vec o)
-  where
-    cmp' :: k -> k -> Ordering
-    cmp' k1 k2 = cmp (k1, _map o ! k1) (k2, _map o ! k2)
-
-vectorUncons :: Vector k -> Maybe (k, Vector k)
-vectorUncons x = if Vector.null x then Nothing else Just (Vector.head x, Vector.tail x)
-
-appendEnum :: (Enum k, Ord k) => v -> Order k v -> Order k v
-appendEnum v o = o <> one (next o, v)
-#endif
 
 -- Quickcheck
 

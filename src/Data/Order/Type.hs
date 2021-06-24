@@ -19,7 +19,7 @@ import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import Data.ListLike as ListLike (ListLike(..))
 import qualified Data.ListLike as LL
 import Data.Order.Order
-import Data.SafeCopy (base, contain, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
+import Data.SafeCopy (base, contain, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import qualified Data.Sequence as Seq
 import Data.Typeable (Typeable)
