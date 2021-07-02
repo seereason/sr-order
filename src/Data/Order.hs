@@ -43,24 +43,7 @@ import Extra.QuickCheck
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import Test.QuickCheck
 
-#if 1
 type Order k = MapAndVec k
-#else
--- DANGER - if you uncomment this all your Orders will be converted to
--- AssocLists, and you can't reverse this without adding more
--- migrations and safecopy instances.  (Or re-syncing the database.)
---
--- I did try this change and it worked, but it did not seem to help in
--- any way.  It may have been somewhat slower.
-
-type Order k = AssocList k
-
-instance (SafeCopy k, Ord k, Enum k, SafeCopy v) => SafeCopy (AssocList k v) where version = 4; kind = extension
-
-instance (Ord k, Enum k, SafeCopy k, SafeCopy v) => Migrate (AssocList k v) where
-  type MigrateFrom (AssocList k v) = MapAndVec k v
-  migrate = AssocList . pairs
-#endif
 
 type Key = Integer
 
@@ -71,7 +54,7 @@ data ElementPosition o k v = ElementPosition (o v) (Maybe Int) deriving Show
 -- Quickcheck
 
 -- Build an arbitrary order and a valid insert position for that order
-instance (Ord k, Enum k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
+instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
       InsertPosition o <$> choose (0, Foldable.length o)

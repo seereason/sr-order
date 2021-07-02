@@ -1,5 +1,5 @@
 name:               sr-order
-version:            1.9
+version:            1.9.1
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -38,7 +38,6 @@ library
     sr-extra >= 1.77,
     vector
   exposed-modules:
-    Data.EnumMap
     Data.Order
     Data.Order.One
     Data.Order.Order

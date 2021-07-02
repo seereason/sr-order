@@ -388,7 +388,7 @@ instance One (Set UserId) where
 lookupKey :: Ordered o k v => Int -> o v -> Maybe k
 lookupKey i o = fmap fst (lookupPair i o)
 
-prop_fromPairs :: forall o v k. (Ordered o k v, Eq (o v), Eq k, Ord k, Enum k, Eq v) => o v -> Bool
+prop_fromPairs :: forall o v k. (Ordered o k v, Eq (o v), Eq k, Ord k, Eq v) => o v -> Bool
 prop_fromPairs o = fromPairs (pairs o) == o
 
 prop_keys :: forall o v k. (Ordered o (Index (o v)) v, k ~ Index (o v)) => o v -> Bool
@@ -428,7 +428,7 @@ prop_lookupPair o a =
       k = next o in
   lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
 
-prop_uncons :: forall o v k. (Ordered o k v, Eq (o v), Enum k, Eq v) => o v -> Bool
+prop_uncons :: forall o v k. (Ordered o k v, Eq (o v), Eq v) => o v -> Bool
 prop_uncons o = o == maybe mempty (\(pair, o') -> one pair <> o') (uncons o)
 
 prop_null :: forall o v k. Ordered o k v => o v -> Bool

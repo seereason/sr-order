@@ -58,10 +58,10 @@ instance FoldableWithIndex k (AssocList k) where
   ifoldMap :: forall a r. Monoid r => (k -> a -> r) -> AssocList k a -> r
   ifoldMap f (AssocList o) = foldMap (uncurry f) o
 
-instance Enum k => FunctorWithIndex k (AssocList k) where
+instance FunctorWithIndex k (AssocList k) where
     imap f (AssocList prs) = AssocList (fmap (\(k, a) -> (k, f k a)) prs)
 
-instance (Enum k, Ord k) => Traversable (AssocList k) where
+instance Ord k => Traversable (AssocList k) where
   traverse f (AssocList prs) = AssocList <$> go prs
     where go ((k, a) : more) = (:) <$> ((k,) <$> f a) <*> go more
           go [] = pure []
@@ -69,7 +69,7 @@ instance (Enum k, Ord k) => Traversable (AssocList k) where
 -- The TraversableWithIndex instance for [(k, a)] has an Int for the
 -- index and (k, a) for the values.  That is not what we want here,
 -- we want the index to be k and the value to be a.
-instance (Enum k, Ord k) => TraversableWithIndex k (AssocList k) where
+instance Ord k => TraversableWithIndex k (AssocList k) where
   itraverse f (AssocList prs) = AssocList <$> go prs
     where go ((k, a) : more) = (:) <$> ((k,) <$> f k a) <*> go more
           go [] = pure []
@@ -120,7 +120,7 @@ instance (Eq k, Ord k) => Ordered (AssocList k) k v where
   -- insertAt - default
   -- append -- default
 
-instance (Enum k, Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (AssocList k v) where
+instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (AssocList k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
       let ks' = LL.nub ks
