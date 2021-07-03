@@ -12,6 +12,7 @@ module Data.Order.One
   , Ordered
   , Ordered'
   , pairs
+  , toMap
   , toPairList
   , keys
   , keysSet
@@ -73,6 +74,7 @@ import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
 import Data.Maybe (fromJust, fromMaybe, isNothing)
 import Data.Proxy
+import qualified Data.Map as Map (Map, insert)
 import Data.Set as Set (fromList, insert, notMember, Set)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
@@ -128,6 +130,9 @@ class (FoldableWithIndex (Index (o v)) o,
   -- | Return the key value pairs in order.
   pairs :: o v -> [(k, v)]
   pairs o = ifoldr (\k v r -> (k, v) : r) [] o
+
+  toMap :: o v -> Map.Map k v
+  toMap o = ifoldr (\k v r -> Map.insert k v r) mempty o
 
   -- FIXME: this is incredibly slow: pos 3 (fromPairs (fmap (,()) [0..10000]))
   -- Could this be lazy?  Depends on the semigroup instance I guess.
