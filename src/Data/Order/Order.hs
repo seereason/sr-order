@@ -1,7 +1,10 @@
 {-# LANGUAGE CPP, DeriveGeneric, InstanceSigs, UndecidableInstances #-}
 
 module Data.Order.Order
-  ( MapAndVec
+  ( MapAndVec(MapAndVec)
+  , MapAndVec_3(..)
+  , EnumMap
+  , enumMaptoList
   ) where
 
 -- import Control.Lens (_1, _2, over)
@@ -13,7 +16,7 @@ import qualified Data.ListLike as LL
 import Data.Map.Strict as Map ((!), Map, fromList)
 import qualified Data.Map.Strict as Map
 import Data.Order.One hiding ((!))
-import Data.SafeCopy (base, SafeCopy(..), safeGet, safePut)
+import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
@@ -23,6 +26,10 @@ import GHC.Exts as GHC (IsList(..))
 import GHC.Generics (Generic)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 import Test.QuickCheck
+
+import Control.Lens (_1, over)
+import qualified Data.IntMap as IntMap
+import Data.IntMap (IntMap)
 
 -- | The primary instance of 'Ordered', the 'MapAndVec' type is
 -- similar to an association list, a combination of a 'Vector' and a
@@ -85,7 +92,7 @@ data MapAndVec k v =
     , _theVec :: Vector k
     } deriving (Generic, Data, Typeable, Functor, Read)
 
-instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (MapAndVec k v) where version = 4; kind = base
+instance (Ord k, SafeCopy k, SafeCopy v, Migrate (MapAndVec k v)) => SafeCopy (MapAndVec k v) where version = 4; kind = extension
 
 instance Ord k => Sem.Semigroup (MapAndVec k v) where
     (<>) a b =
@@ -109,6 +116,14 @@ instance (Ord k) => Monoid (MapAndVec k v) where
     mempty = MapAndVec mempty mempty
 #if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
+#endif
+
+data MapAndVec_3 k v = MapAndVec_3 (EnumMap k v) (Vector k) deriving (Generic)
+instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (MapAndVec_3 k v) where version = 3; kind = base
+#if 0
+instance (Ord k, SafeCopy k, SafeCopy v) => Migrate (MapAndVec k v) where
+  type MigrateFrom (MapAndVec k v) = MapAndVec_3 k v
+  migrate (MapAndVec_3 mp vec) = MapAndVec (Map.fromList (enumMaptoList mp)) vec
 #endif
 
 instance (Ord k, Monoid (MapAndVec k v)) => LL.FoldableLL (MapAndVec k v) (k, v) where
@@ -233,3 +248,8 @@ instance (Ord k) => GHC.IsList (LL (MapAndVec k v)) where
 instance (Ord k, Monoid (MapAndVec k v)) => LL.FoldableLL (LL (MapAndVec k v)) (k, v) where
     foldl f r0 (LL xs) = Foldable.foldl (\r k -> f r (k, _theMap xs ! k)) r0 (_theVec xs)
     foldr f r0 (LL xs) = Foldable.foldr (\k r -> f (k, _theMap xs ! k) r) r0 (_theVec xs)
+
+type EnumMap k a = IntMap a
+
+enumMaptoList :: Enum k => EnumMap k a -> [(k, a)]
+enumMaptoList = fmap (over _1 toEnum) . IntMap.toList

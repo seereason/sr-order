@@ -21,7 +21,7 @@ module Data.Order.One
   , member
   , pos
   , keyView
-  , singleton
+  , Data.Order.One.singleton
   , cons
   -- * With At constraint
   , uncons
@@ -75,7 +75,7 @@ import Data.List ((\\), nub, sortBy)
 import Data.Maybe (fromJust, fromMaybe, isNothing)
 import Data.Proxy
 import qualified Data.Map as Map (Map, insert)
-import Data.Set as Set (fromList, insert, notMember, Set)
+import Data.Set as Set (fromList, insert, notMember, Set, singleton)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
 
@@ -90,6 +90,10 @@ class One x where
 instance One [a] where
   type OneItem [a] = a
   one = (:[])
+
+instance One (Set a) where
+  type OneItem (Set a) = a
+  one = Set.singleton
 
 -- Ordered currently pinned to Order
 -- instance (Eq k, Ord k) => Ordered (AssocList k) k v
