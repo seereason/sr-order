@@ -16,7 +16,7 @@ import qualified Data.ListLike as LL
 import Data.Map.Strict as Map ((!), Map, fromList)
 import qualified Data.Map.Strict as Map
 import Data.Order.One hiding ((!))
-import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
+import Data.SafeCopy (base, SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
@@ -92,7 +92,7 @@ data MapAndVec k v =
     , _theVec :: Vector k
     } deriving (Generic, Data, Typeable, Functor, Read)
 
-instance (Ord k, SafeCopy k, SafeCopy v, Migrate (MapAndVec k v)) => SafeCopy (MapAndVec k v) where version = 4; kind = extension
+instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (MapAndVec k v) where version = 4; kind = base
 
 instance Ord k => Sem.Semigroup (MapAndVec k v) where
     (<>) a b =
@@ -120,11 +120,6 @@ instance (Ord k) => Monoid (MapAndVec k v) where
 
 data MapAndVec_3 k v = MapAndVec_3 (EnumMap k v) (Vector k) deriving (Generic)
 instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (MapAndVec_3 k v) where version = 3; kind = base
-#if 0
-instance (Ord k, SafeCopy k, SafeCopy v) => Migrate (MapAndVec k v) where
-  type MigrateFrom (MapAndVec k v) = MapAndVec_3 k v
-  migrate (MapAndVec_3 mp vec) = MapAndVec (Map.fromList (enumMaptoList mp)) vec
-#endif
 
 instance (Ord k, Monoid (MapAndVec k v)) => LL.FoldableLL (MapAndVec k v) (k, v) where
     foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _theMap xs ! k)) r0 (_theVec xs)
