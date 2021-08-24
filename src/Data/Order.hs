@@ -26,9 +26,9 @@
 -- ListLike instance that treats it as a sequence of (k, a) pairs.
 
 module Data.Order
-  ( module Data.Order.Order
-  , module Data.Order.One
-  , module Data.Order.AssocList
+  ( module Data.Order.Ordered
+  -- , module Data.Order.AssocList
+  , module Data.Order.MapAndVec
   , Order
   , tests
   ) where
@@ -38,15 +38,18 @@ import Control.Lens (over, _1)
 import qualified Data.Foldable as Foldable
 import Data.Int
 import Data.Monoid
-import Data.Order.AssocList
-import Data.Order.One
-import Data.Order.Order
-import Extra.QuickCheck
+--import Data.Order.AssocList
+import Data.Order.Ordered
+import Data.Order.MapAndVec
+--import Data.Order.MapAndList
+import Extra.QuickCheck ({-instance Monoid Result-})
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import System.Time.Extra
 import Test.QuickCheck
 
 type Order k = MapAndVec k
+-- type Order k = MapAndList k
+-- type Order k = AssocList k
 
 type Key = Integer
 
@@ -76,11 +79,9 @@ tests = do
     , quickCheckResult' $ withMaxSuccess 100 (prop_uncons @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_splitAt @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_fromPairs @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_fromPairs @(AssocList Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_insert_delete @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_insert_delete_pos @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_keys @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_keys @(AssocList Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_lookup @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_lookupKey @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_lookupPair @(Order Key) @String)
@@ -97,4 +98,4 @@ quickCheckResult' prop = over _1 (: []) <$> duration (quickCheckResult prop)
 
 throwResult' :: ([Seconds], Result) -> IO ([Seconds], Result)
 throwResult' (secs, result@(Success {})) = return (secs, result)
-throwResult' (secs, result) = throw result
+throwResult' (_secs, result) = throw result

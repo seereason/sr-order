@@ -7,6 +7,7 @@ module Data.Order.AssocList where
 import Control.Lens hiding (cons, uncons)
 import Data.Data (Data)
 import Data.Order.One
+import Data.Order.Ordered
 import Data.Set as Set (fromList)
 import Data.Serialize (Serialize)
 import Data.List (sortBy)

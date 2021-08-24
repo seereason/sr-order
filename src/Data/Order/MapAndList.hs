@@ -1,10 +1,7 @@
 {-# LANGUAGE CPP, DeriveGeneric, InstanceSigs, UndecidableInstances #-}
 
-module Data.Order.Order
-  ( MapAndVec(MapAndVec)
-  , MapAndVec_3(..)
-  , EnumMap
-  , enumMaptoList
+module Data.Order.MapAndList
+  ( MapAndList(MapAndList)
   ) where
 
 -- import Control.Lens (_1, _2, over)
@@ -13,24 +10,18 @@ import Data.Data (Data)
 import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import qualified Data.ListLike as LL
-import Data.Map.Strict as Map ((!), Map, fromList)
+import Data.Map.Strict as Map ((!), Map)
 import qualified Data.Map.Strict as Map
-import Data.Order.One hiding ((!))
+import Data.Order.One (One(OneItem, one))
+import Data.Order.Ordered hiding ((!))
 import Data.SafeCopy (base, SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
 import qualified Data.Set as Set (member, singleton)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
-import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
-import qualified Data.Vector as Vector
-import GHC.Exts as GHC (IsList(..))
 import GHC.Generics (Generic)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 import Test.QuickCheck
-
-import Control.Lens (_1, over)
-import qualified Data.IntMap as IntMap
-import Data.IntMap (IntMap)
 
 -- | The primary instance of 'Ordered', the 'MapAndVec' type is
 -- similar to an association list, a combination of a 'Vector' and a
@@ -87,24 +78,24 @@ import Data.IntMap (IntMap)
 -- λ> set (at 'x') (Just 30) (fromPairs [('a',10),('b',20)])
 -- fromPairs [('a',10),('b',20),('x',30)] :: MapAndVec (Char) (Integer)
 -- @
-data MapAndVec k v =
-  MapAndVec
+data MapAndList k v =
+  MapAndList
     { _theMap :: Map k v
-    , _theVec :: Vector k
+    , _theVec :: [k]
     } deriving (Generic, Data, Typeable, Functor, Read)
 
-instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (MapAndVec k v) where version = 4; kind = base
+instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (MapAndList k v) where version = 4; kind = base
 
-instance Ord k => Sem.Semigroup (MapAndVec k v) where
+instance Ord k => Sem.Semigroup (MapAndList k v) where
     (<>) a b =
       -- If b contains keys already in a they must be removed.
       -- Arguably, the values of matching keys are supposed to match.
       -- This Semigroup is not really that great, I should probably
       -- remove it, or create some newtypes for different
       -- interpretations.
-      let v = _theVec a <> Vector.filter (\x -> Map.notMember x (_theMap a)) (_theVec b)
+      let v = _theVec a <> LL.filter (\x -> Map.notMember x (_theMap a)) (_theVec b)
           m = Map.union (_theMap b) (_theMap a) in -- prefer the values in b
-      MapAndVec m v
+      MapAndList m v
     -- ^ If there are any common @k@ values in the shared
     -- map the elements from the second is omitted.  For
     -- this reason it is suggested that, when in doubt,
@@ -113,27 +104,24 @@ instance Ord k => Sem.Semigroup (MapAndVec k v) where
     --   mapKeys Left a <> mapKeys Right b
     -- @@
 
-instance (Ord k) => Monoid (MapAndVec k v) where
-    mempty = MapAndVec mempty mempty
+instance (Ord k) => Monoid (MapAndList k v) where
+    mempty = MapAndList mempty mempty
 #if !(MIN_VERSION_base(4,11,0))
     mappend = (<>)
 #endif
 
-data MapAndVec_3 k v = MapAndVec_3 (EnumMap k v) (Vector k) deriving (Generic)
-instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (MapAndVec_3 k v) where version = 3; kind = base
-
-instance (Ord k, Monoid (MapAndVec k v)) => LL.FoldableLL (MapAndVec k v) (k, v) where
+instance (Ord k, Monoid (MapAndList k v)) => LL.FoldableLL (MapAndList k v) (k, v) where
     foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _theMap xs ! k)) r0 (_theVec xs)
     foldr f r0 xs = Foldable.foldr (\k r -> f (k, _theMap xs ! k) r) r0 (_theVec xs)
 
-instance SafeCopy (MapAndVec k v) => Serialize (MapAndVec k v) where
+instance SafeCopy (MapAndList k v) => Serialize (MapAndList k v) where
     put = safePut
     get = safeGet
 
-instance forall k v. (Ord k, Show k, Show v, Typeable k, Typeable v) => Show (MapAndVec k v) where
+instance forall k v. (Ord k, Show k, Show v, Typeable k, Typeable v) => Show (MapAndList k v) where
   show o = "fromPairs " <> show (pairs o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
 
-instance forall k v. (Ord k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (MapAndVec k v) where
+instance forall k v. (Ord k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (MapAndList k v) where
   pPrint o = text "Order " <> pPrint (pairs o)
 
 -- Fold over the values only
@@ -141,140 +129,90 @@ instance forall k v. (Ord k, Pretty k, Pretty v, Typeable k, Typeable v) => Pret
 -- λ> foldMap id (fromList [(1, "a"), (2, "b")])
 -- "ab"
 -- @@
-instance Ord k => Foldable (MapAndVec k) where
+instance Ord k => Foldable (MapAndList k) where
     foldMap f o = Foldable.foldMap (\k -> f (_theMap o ! k)) (_theVec o)
     null o = null (_theVec o)
     length o = length (_theVec o)
 
-instance Ord k => FoldableWithIndex k (MapAndVec k) where
+instance Ord k => FoldableWithIndex k (MapAndList k) where
     ifoldMap f o = Foldable.foldMap (\k -> f k (_theMap o ! k)) (_theVec o)
 
-instance FunctorWithIndex k (MapAndVec k) where
-    imap f o = MapAndVec (Map.mapWithKey f (_theMap o)) (_theVec o)
+instance FunctorWithIndex k (MapAndList k) where
+    imap f o = MapAndList (Map.mapWithKey f (_theMap o)) (_theVec o)
     {-# INLINE imap #-}
 
 -- Not seeing what's unsafe about this
-fromPairsUnsafe :: forall t k a. (Ord k, Foldable t) => t (k, a) -> MapAndVec k a
+fromPairsUnsafe :: forall t k a. (Ord k, Foldable t) => t (k, a) -> MapAndList k a
 fromPairsUnsafe prs =
-  foldr (\(k, a) (MapAndVec m v) -> MapAndVec (Map.insert k a m) (Vector.cons k v)) mempty prs
+  foldr (\(k, a) (MapAndList m v) -> MapAndList (Map.insert k a m) (LL.cons k v)) mempty prs
 {-# DEPRECATED fromPairsUnsafe "Use fromPairs" #-}
 
-instance (Ord k, Eq v) => Eq (MapAndVec k v) where
+instance (Ord k, Eq v) => Eq (MapAndList k v) where
   a == b = _theMap a == _theMap b && _theVec a == _theVec b
 
-instance (Ord k, Eq v, Ord v) => Ord (MapAndVec k v) where
+instance (Ord k, Eq v, Ord v) => Ord (MapAndList k v) where
     compare a b = compare (_theVec a) (_theVec b) <> compare (_theMap a) (_theMap b)
 
-instance (Ord k) => Traversable (MapAndVec k) where
-    traverse f o = MapAndVec <$> traverse f (_theMap o) <*> pure (_theVec o)
+instance (Ord k) => Traversable (MapAndList k) where
+    traverse f o = MapAndList <$> traverse f (_theMap o) <*> pure (_theVec o)
 
-instance (Ord k) => TraversableWithIndex k (MapAndVec k) where
-    itraverse f o = MapAndVec <$> itraverse (\k a -> f k a) (_theMap o) <*> pure (_theVec o)
+instance (Ord k) => TraversableWithIndex k (MapAndList k) where
+    itraverse f o = MapAndList <$> itraverse (\k a -> f k a) (_theMap o) <*> pure (_theVec o)
 
-type instance Index (MapAndVec k a) = k
-type instance IxValue (MapAndVec k a) = a
-instance Ord k => Ixed (MapAndVec k a) where
+type instance Index (MapAndList k a) = k
+type instance IxValue (MapAndList k a) = a
+instance Ord k => Ixed (MapAndList k a) where
     ix k f o =
         case Map.lookup k (_theMap o) of
-          Just a -> fmap (\a' -> MapAndVec (Map.insert k a' (_theMap o)) (_theVec o)) (f a)
+          Just a -> fmap (\a' -> MapAndList (Map.insert k a' (_theMap o)) (_theVec o)) (f a)
           Nothing -> pure o
 
-instance Ord k => At (MapAndVec k a) where
+instance Ord k => At (MapAndList k a) where
     at k f o =
         case Map.lookup k (_theMap o) of
           Just a ->
-              fmap (maybe (MapAndVec (Map.delete k (_theMap o)) (Vector.filter (/= k) (_theVec o)))
-                          (\a' -> MapAndVec (Map.insert k a' (_theMap o)) (_theVec o)))
+              fmap (maybe (MapAndList (Map.delete k (_theMap o)) (LL.filter (/= k) (_theVec o)))
+                          (\a' -> MapAndList (Map.insert k a' (_theMap o)) (_theVec o)))
                    (f (Just a))
           Nothing ->
               fmap (maybe o
-                          (\a' -> MapAndVec (Map.insert k a' (_theMap o)) (Vector.singleton k <> _theVec o)))
+                          (\a' -> MapAndList (Map.insert k a' (_theMap o)) (LL.singleton k <> _theVec o)))
                    (f Nothing)
 
-instance Ord k => One (MapAndVec k v) where
-  type OneItem (MapAndVec k v) = (k, v)
+instance Ord k => One (MapAndList k v) where
+  type OneItem (MapAndList k v) = (k, v)
   one (k, v) = fromPairsUnsafe @[] [(k, v)]
 
-vectorUncons :: Vector a -> Maybe (a, Vector a)
-vectorUncons ks =
-  case ks !? 0 of
-    Nothing -> Nothing
-    Just k -> Just (k, Vector.tail ks)
-{-# INLINE vectorUncons #-}
-
-instance (Eq k, Ord k) => Ordered (MapAndVec k) k v where
+instance (Eq k, Ord k) => Ordered (MapAndList k) k v where
   -- Override methods that could benefit from the At instance
   delete k o = set (at k) Nothing o
   -- we should also do good uncons, splitAt, and break implementations here
   {-# INLINE delete #-}
-  uncons (MapAndVec mp ks) =
-    case vectorUncons ks of
+  uncons (MapAndList mp ks) =
+    case LL.uncons ks of
       Nothing -> Nothing
       Just (k, ks') ->
         case Map.lookup k mp of
           Nothing -> Nothing -- error
-          Just v -> Just ((k, v), MapAndVec (Map.delete k mp) ks')
+          Just v -> Just ((k, v), MapAndList (Map.delete k mp) ks')
   {-# INLINE uncons #-}
-  splitAt i (MapAndVec mp ks) =
-    (MapAndVec mp1 ks1, MapAndVec mp2 ks2)
+  splitAt i (MapAndList mp ks) =
+    (MapAndList mp1 ks1, MapAndList mp2 ks2)
     where
-      (ks1, ks2) = Vector.splitAt i ks
+      (ks1, ks2) = LL.splitAt i ks
       kset = foldMap Set.singleton ks1
       (mp1, mp2) = Map.partitionWithKey (\k _ -> Set.member k kset) mp
   {-# INLINE splitAt #-}
   fromPairs prs =
-    -- MapAndVec (Map.fromList prs) (GHC.fromList (fmap fst prs))
-    foldr (\(k, a) (MapAndVec m v) -> MapAndVec (Map.insert k a m) (Vector.cons k v)) mempty prs
+    -- MapAndList (Map.fromList prs) (GHC.fromList (fmap fst prs))
+    foldr (\(k, a) (MapAndList m v) -> MapAndList (Map.insert k a m) (LL.cons k v)) mempty prs
   {-# INLINE fromPairs #-}
-  pos k (MapAndVec _ v) = Vector.findIndex (== k) v
+  pos k (MapAndList _ v) = LL.findIndex (== k) v
   {-# INLINE pos #-}
 
-instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (MapAndVec k v) where
+instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (MapAndList k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
       let ks' = LL.nub ks
       (vs :: [v]) <- vector (LL.length ks')
-      return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: MapAndVec k v)
-
-newtype LL a = LL {unLL :: a} deriving (Eq, Ord)
-
-instance Monoid a => Monoid (LL a) where
-  mempty = LL mempty
-#if !(MIN_VERSION_base(4,11,0))
-  mappend = (<>)
-#endif
-
-instance Sem.Semigroup a => Sem.Semigroup (LL a) where
-  (<>) (LL a) (LL b) = LL (a <> b)
-
--- | A ListLike instance hidden inside the newtype LL.
-instance (Ord k, LL.FoldableLL (LL (MapAndVec k v)) (k, v)) => LL.ListLike (LL (MapAndVec k v)) (k, v) where
-  singleton :: (k, v) -> LL (MapAndVec k v)
-  singleton = LL . one
-  null :: LL (MapAndVec k v) -> Bool
-  null = Foldable.null . unLL
-  uncons :: LL (MapAndVec k v) -> Maybe ((k, v), LL (MapAndVec k v))
-  uncons (LL o) = over (_Just . _2) LL (uncons o)
-
-  drop :: Int -> LL (MapAndVec k a) -> LL (MapAndVec k a)
-  drop n = LL . Data.Order.One.drop n . unLL
-
-  take :: Int -> LL (MapAndVec k a) -> LL (MapAndVec k a)
-  take n = LL . Data.Order.One.take n . unLL
-
-  splitAt :: Int -> LL (MapAndVec k a) -> (LL (MapAndVec k a), LL (MapAndVec k a))
-  splitAt n (LL o) = over _1 LL $ over _2 LL $ Data.Order.One.splitAt n o
-
-instance (Ord k) => GHC.IsList (LL (MapAndVec k v)) where
-  type Item (LL (MapAndVec k v)) = (k, v)
-  fromList = LL . fromPairsUnsafe
-  toList = toPairList . unLL
-
-instance (Ord k, Monoid (MapAndVec k v)) => LL.FoldableLL (LL (MapAndVec k v)) (k, v) where
-    foldl f r0 (LL xs) = Foldable.foldl (\r k -> f r (k, _theMap xs ! k)) r0 (_theVec xs)
-    foldr f r0 (LL xs) = Foldable.foldr (\k r -> f (k, _theMap xs ! k) r) r0 (_theVec xs)
-
-type EnumMap k a = IntMap a
-
-enumMaptoList :: Enum k => EnumMap k a -> [(k, a)]
-enumMaptoList = fmap (over _1 toEnum) . IntMap.toList
+      return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: MapAndList k v)

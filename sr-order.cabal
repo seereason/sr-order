@@ -41,7 +41,9 @@ library
   exposed-modules:
     Data.Order
     Data.Order.One
-    Data.Order.Order
+    Data.Order.Ordered
+    Data.Order.MapAndList
+    Data.Order.MapAndVec
     Data.Order.AssocList
     Data.UList
 

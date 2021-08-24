@@ -65,26 +65,34 @@ import Prelude hiding (break, splitAt)
 keys :: (AssocList o k v) => o -> [k]
 -- keys :: (Functor f, ListLike full (Item full), ListLike (f (b1, b2)) (GHC.Exts.Item full)) => full -> f b1
 keys = fmap fst . fromListLike
+{-# INLINEABLE keys #-}
 
 values :: (AssocList o k v) => o -> [v]
 values = fmap snd . fromListLike
+{-# INLINEABLE values #-}
 
 next :: (AssocList o k v, Enum k, Ord k) => o -> k
 next = succ . foldl' max (toEnum 0) . keys
+{-# INLINEABLE next #-}
 
 appendEnum :: (AssocList o k v, Enum k, Ord k) => v -> o -> o
 appendEnum v o = o <> singleton (next o, v)
+{-# INLINEABLE appendEnum #-}
 
 prependEnum :: (AssocList o k v, Enum k, Ord k) => v -> o -> o
 prependEnum v o = singleton (succ (foldl' max (toEnum 0) (keys o)), v) <> o
+{-# INLINEABLE prependEnum #-}
 
 mapKeys :: (AssocList o k v, AssocList o' k' v) => (k -> k') -> o -> o'
 mapKeys f = fromList . fmap (over _1 f) . fromListLike
+{-# INLINEABLE mapKeys #-}
 
 insertAt :: (AssocList o k v, Enum k, Ord k) => Int -> v -> o -> (o, k)
 insertAt n v o = let k = next o in (insertPairAt n (k, v) o, k)
+{-# INLINEABLE insertAt #-}
 
 -- | Attempting to insert an existing k may give surprising results.
 -- Best to delete it first.
 insertPairAt :: AssocList o k v => Int -> (k, v) -> o -> o
 insertPairAt n (k, v) o = uncurry (<>) $ over _2 (singleton (k, v) <>) $ splitAt n o
+{-# INLINEABLE insertPairAt #-}
