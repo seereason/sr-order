@@ -19,8 +19,9 @@ import Data.Order.One hiding ((!))
 import Data.SafeCopy (base, SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
+import qualified Data.Set as Set (member, singleton)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
-import Data.Vector (Vector)
+import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
 import qualified Data.Vector as Vector
 import GHC.Exts as GHC (IsList(..))
 import GHC.Generics (Generic)
@@ -150,7 +151,9 @@ instance Ord k => FoldableWithIndex k (MapAndVec k) where
 
 instance FunctorWithIndex k (MapAndVec k) where
     imap f o = MapAndVec (Map.mapWithKey f (_theMap o)) (_theVec o)
+    {-# INLINE imap #-}
 
+-- Not seeing what's unsafe about this
 fromPairsUnsafe :: forall t k a. (Ord k, Foldable t) => t (k, a) -> MapAndVec k a
 fromPairsUnsafe prs =
   foldr (\(k, a) (MapAndVec m v) -> MapAndVec (Map.insert k a m) (Vector.cons k v)) mempty prs
@@ -192,12 +195,39 @@ instance Ord k => One (MapAndVec k v) where
   type OneItem (MapAndVec k v) = (k, v)
   one (k, v) = fromPairsUnsafe @[] [(k, v)]
 
+vectorUncons :: Vector a -> Maybe (a, Vector a)
+vectorUncons ks =
+  case ks !? 0 of
+    Nothing -> Nothing
+    Just k -> Just (k, Vector.tail ks)
+{-# INLINE vectorUncons #-}
+
 instance (Eq k, Ord k) => Ordered (MapAndVec k) k v where
   -- Override methods that could benefit from the At instance
   delete k o = set (at k) Nothing o
   -- we should also do good uncons, splitAt, and break implementations here
+  {-# INLINE delete #-}
+  uncons (MapAndVec mp ks) =
+    case vectorUncons ks of
+      Nothing -> Nothing
+      Just (k, ks') ->
+        case Map.lookup k mp of
+          Nothing -> Nothing -- error
+          Just v -> Just ((k, v), MapAndVec (Map.delete k mp) ks')
+  {-# INLINE uncons #-}
+  splitAt i (MapAndVec mp ks) =
+    (MapAndVec mp1 ks1, MapAndVec mp2 ks2)
+    where
+      (ks1, ks2) = Vector.splitAt i ks
+      kset = foldMap Set.singleton ks1
+      (mp1, mp2) = Map.partitionWithKey (\k _ -> Set.member k kset) mp
+  {-# INLINE splitAt #-}
   fromPairs prs =
-    MapAndVec (Map.fromList prs) (GHC.fromList (fmap fst prs))
+    -- MapAndVec (Map.fromList prs) (GHC.fromList (fmap fst prs))
+    foldr (\(k, a) (MapAndVec m v) -> MapAndVec (Map.insert k a m) (Vector.cons k v)) mempty prs
+  {-# INLINE fromPairs #-}
+  pos k (MapAndVec _ v) = Vector.findIndex (== k) v
+  {-# INLINE pos #-}
 
 instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (MapAndVec k v) where
   arbitrary = do

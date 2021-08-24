@@ -1,5 +1,5 @@
 name:               sr-order
-version:            1.9.3
+version:            1.9.4
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -30,6 +30,7 @@ library
     cereal,
     containers,
     data-default,
+    extra,
     lens,
     ListLike,
     pretty,
@@ -50,7 +51,7 @@ test-suite order-tests
   ghc-options: -Wall -O
   hs-source-dirs: tests
   main-is: Main.hs
-  build-depends: base, containers, extra, HUnit, QuickCheck, sr-order
+  build-depends: base, containers, extra, HUnit, lens, mtl, QuickCheck, sr-order
 
 source-repository head
   type:     git

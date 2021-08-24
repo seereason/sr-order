@@ -134,29 +134,36 @@ class (FoldableWithIndex (Index (o v)) o,
   -- | Return the key value pairs in order.
   pairs :: o v -> [(k, v)]
   pairs o = ifoldr (\k v r -> (k, v) : r) [] o
+  {-# INLINE pairs #-}
 
   toMap :: o v -> Map.Map k v
   toMap o = ifoldr (\k v r -> Map.insert k v r) mempty o
+  {-# INLINE toMap #-}
 
   -- FIXME: this is incredibly slow: pos 3 (fromPairs (fmap (,()) [0..10000]))
   -- Could this be lazy?  Depends on the semigroup instance I guess.
   fromPairs :: [(k, v)] -> o v
   fromPairs [] = mempty
   fromPairs ((k, v) : more) = one (k, v) <> fromPairs more
+  {-# INLINE fromPairs #-}
 
   -- | Return the keys in order.
   keys :: o v -> [k]
   keys o = ifoldr (\k _ r -> k : r) [] o
+  {-# INLINE keys #-}
 
   keysSet :: o v -> Set k
   keysSet o = ifoldr (\k _ r -> Set.insert k r) mempty o
+  {-# INLINE keysSet #-}
 
   -- | Return the values in order.
   values :: o v -> [v]
   values o = ifoldr (\_ v r -> v : r) [] o
+  {-# INLINE values #-}
 
   member :: Index (o v) -> o v -> Bool
   member k o = has (ix k) o
+  {-# INLINE member #-}
 
   -- | Use ifoldl rather than ifoldl' so that long lists get short circuited:
   -- % foldr' (\a r -> a == 10 || r) False [1..]
@@ -172,6 +179,7 @@ class (FoldableWithIndex (Index (o v)) o,
           Nothing -> Nothing
           Just ((k', v), o') ->
             if k == k' then Just n else go (succ n) o'
+  {-# INLINE pos #-}
 
   -- | Like 'Data.Set.minView', if k is present returns the position,
   -- associated value, and the order with that value removed.  (was view)
@@ -278,9 +286,13 @@ class (FoldableWithIndex (Index (o v)) o,
   -- | Insert @v@ at a specified position in @o@, and associate it with
   -- the key @k@.
   insertPairAt :: Int -> (k, v) -> o v -> o v
-  insertPairAt n (k, a) o =
-    let (before, after) = splitAt n o in
-    before <> one (k, a) <> after
+  insertPairAt i (k, v) o =
+    case keyView k o of
+      Nothing ->
+        let (before, after) = splitAt i o in
+          before <> one (k, v) <> after
+      Just (oldi, oldv, o') ->
+        insertPairAt (if i > oldi then i - 1 else i) (k, v) o'
 
   -- | Insert a pair at position n, unless the key is already present in
   -- which case update it with the combinator.
@@ -291,10 +303,11 @@ class (FoldableWithIndex (Index (o v)) o,
     -> (k, v)
     -> o v
     -> o v
-  insertPairAtWith f n (k, new) o =
-    case view (at k) o of
-      Nothing -> insertPairAt n (k, new) o
-      Just old -> set (at k) (Just (f old new)) o
+  insertPairAtWith f i (k, v) o =
+    case keyView k o of
+      Nothing -> insertPairAt i (k, v) o
+      Just (oldi, oldv, o') ->
+        insertPairAt (if i > oldi then i - 1 else i) (k, f oldv v) o'
 
   insertAt :: Enum k => Int -> v -> o v -> (o v, k)
   insertAt n a o =

@@ -33,6 +33,8 @@ module Data.Order
   , tests
   ) where
 
+import Control.Exception (throw)
+import Control.Lens (over, _1)
 import qualified Data.Foldable as Foldable
 import Data.Int
 import Data.Monoid
@@ -41,6 +43,7 @@ import Data.Order.One
 import Data.Order.Order
 import Extra.QuickCheck
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
+import System.Time.Extra
 import Test.QuickCheck
 
 type Order k = MapAndVec k
@@ -66,25 +69,32 @@ instance (Ordered o k v, Arbitrary (o v), Arbitrary k, Arbitrary v) => Arbitrary
         0 -> return $ ElementPosition o Nothing
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
 
-tests :: IO Result
+tests :: IO ([Seconds], Result)
 tests = do
   mconcat <$> sequence
-    [ quickCheckResult $ withMaxSuccess 100 (prop_keys @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_keys @(AssocList Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_lookup @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_lookupKey @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_lookupPair @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_splitAt @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_next @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_uncons @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_null @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_singleton @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_toPairs_fromPairs @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_delete @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_insertAt @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_insert_delete @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_insert_delete_pos @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_fromPairs @(Order Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_fromPairs @(AssocList Key) @String)
-    , quickCheckResult $ withMaxSuccess 100 (prop_pos_insertAt @(Order Key) @())
-    ] >>= throwResult
+    [ quickCheckResult' $ withMaxSuccess 100 (prop_toPairs_fromPairs @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_uncons @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_splitAt @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_fromPairs @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_fromPairs @(AssocList Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_insert_delete @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_insert_delete_pos @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_keys @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_keys @(AssocList Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_lookup @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_lookupKey @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_lookupPair @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_next @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_null @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_singleton @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_delete @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_insertAt @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 100 (prop_pos_insertAt @(Order Key) @())
+    ] >>= throwResult'
+
+quickCheckResult' :: Testable prop => prop -> IO ([Seconds], Result)
+quickCheckResult' prop = over _1 (: []) <$> duration (quickCheckResult prop)
+
+throwResult' :: ([Seconds], Result) -> IO ([Seconds], Result)
+throwResult' (secs, result@(Success {})) = return (secs, result)
+throwResult' (secs, result) = throw result
