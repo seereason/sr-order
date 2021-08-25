@@ -2,7 +2,9 @@
 
 {-# LANGUAGE DeriveAnyClass, TemplateHaskell, UndecidableInstances #-}
 
-module Data.Order.AssocList where
+module Data.Order.AssocList
+  ( AssocList(..)
+  ) where
 
 import Control.Lens hiding (cons, uncons)
 import Data.Data (Data)
