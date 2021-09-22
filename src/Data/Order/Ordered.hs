@@ -73,6 +73,7 @@ module Data.Order.Ordered
   , prop_pos_insertAt
   ) where
 
+--import Debug.Trace
 import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
 import Data.Maybe (fromJust, fromMaybe, isNothing)
@@ -447,12 +448,13 @@ prop_lookup o v =
       k = next o in
     lookup k o' == Just v && lookup k o == Nothing
 
-prop_lookupPair :: forall o v k. (Ordered o k v, Eq (o v), Enum k, Eq v) => o v -> v -> Property
+-- If we insert a pair at a position, lookupPair of that position must return the pair.
+prop_lookupPair :: forall o v k. (Ordered o k v, Eq (o v), Enum k, Eq v, Show k, Show v, Show (o v)) => o v -> v -> Property
 prop_lookupPair o a =
-  forAll (choose (0, length o - 1)) $ \i ->
-  let o' = insertPairAt i (k, a) o
+  forAll (choose (0, length ({-trace ("o=" <> show o)-} o))) $ \i ->
+  let o' = insertPairAt ({-trace ("i=" <> show i)-} i) ({-trace ("pair=" <> show (k, a))-} (k, a)) o
       k = next o in
-  lookupPair i o' == Just (k, a) && lookupPair (length o) o == Nothing
+  lookupPair i ({-trace ("o'=" <> show o')-} o') == Just (k, a)
 
 prop_uncons :: forall o v k. (Ordered o k v, Eq (o v), Eq v) => o v -> Bool
 prop_uncons o = o == maybe mempty (\(pair, o') -> one pair <> o') (uncons o)

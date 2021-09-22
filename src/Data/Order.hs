@@ -87,7 +87,7 @@ tests = do
     , quickCheckResult' $ withMaxSuccess 100 (prop_keys @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_lookup @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_lookupKey @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_lookupPair @(Order Key) @String)
+    , quickCheckResult' $ withMaxSuccess 1000 (prop_lookupPair @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_next @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_null @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_singleton @(Order Key) @String)
