@@ -26,11 +26,16 @@ module Data.Order.Ordered
   , delete
   , deleteAt
   , splitAt
+  , splitAtExactMay
   , break
   , takeWhile
   , dropWhile
+  , headMay
+  , tailMay
   , take
+  , takeExactMay
   , drop
+  , dropExactMay
   , lookupPair
   , lookup
   , (!)
@@ -254,11 +259,21 @@ class (FoldableWithIndex (Index (o v)) o,
         let (before, after) = splitAt (pred i) o' in
           (cons pr before, after)
 
+  splitAtExactMay :: Int -> o v -> Maybe (o v, o v)
+  splitAtExactMay n o | 0 > n || n > length o = Nothing
+  splitAtExactMay n o = Just $ splitAt n o
+
   take :: Int -> o v -> o v
   take n = fst . splitAt n
 
+  takeExactMay :: Int -> o v -> Maybe (o v)
+  takeExactMay n o = fmap fst (splitAtExactMay n o)
+
   drop :: Int -> o v -> o v
   drop n = snd . splitAt n
+
+  dropExactMay :: Int -> o v -> Maybe (o v)
+  dropExactMay n = fmap snd . splitAtExactMay n
 
   deleteAt :: Int -> o v -> o v
   deleteAt n o =
@@ -298,7 +313,7 @@ class (FoldableWithIndex (Index (o v)) o,
     where k = next o
 
   lookupPair :: Int -> o v -> Maybe (k, v)
-  lookupPair n = fmap fst . uncons . take 1 . drop n
+  lookupPair n o = fst <$> (uncons =<< dropExactMay n o)
 
   -- FIXME: uses fromJust
   sortBy ::
@@ -343,6 +358,12 @@ class (FoldableWithIndex (Index (o v)) o,
             r' = r <> filter (\_ k _ -> Set.notMember k ks) o
             ks' = ks <> keysSet o in
         (r', ks')
+
+headMay :: Ordered o k v => o v -> Maybe (k, v)
+headMay o = fmap fst (uncons o)
+
+tailMay :: Ordered o k v => o v -> Maybe (o v)
+tailMay o = fmap snd (uncons o)
 
 overPairs ::
   forall o v k o' v' k'.
