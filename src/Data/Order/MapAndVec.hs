@@ -121,7 +121,14 @@ instance SafeCopy (MapAndVec k v) => Serialize (MapAndVec k v) where
     get = safeGet
 
 instance forall k v. (Ord k, Show k, Show v, Typeable k, Typeable v) => Show (MapAndVec k v) where
-  show o = "fromPairs " <> show (pairs o) <> " :: Order (" <> show (typeRep (Proxy :: Proxy k)) <> ") (" <> show (typeRep (Proxy :: Proxy v)) <> ")"
+  showsPrec d o  = showParen (d > 10) $
+    showString "fromPairs " .
+    shows (pairs o) .
+    showString " :: Order (" .
+    shows (typeRep (Proxy :: Proxy k)) .
+    showString ") (" .
+    shows (typeRep (Proxy :: Proxy v)) .
+    showString ")"
 
 instance forall k v. (Ord k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (MapAndVec k v) where
   pPrint o = text "Order " <> pPrint (pairs o)

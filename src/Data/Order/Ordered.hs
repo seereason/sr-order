@@ -284,6 +284,13 @@ class (FoldableWithIndex (Index (o v)) o,
 
   -- | Insert @v@ at a specified position in @o@, and associate it with
   -- the key @k@.
+  --
+  -- o=[('a',1),('b',2),('c',3),('d',4),('e',5)]
+  -- InsertPairAt i=4 ('f',6) -> [('a',1),('b',2),('c',3),('d',4),('f',6),('e',5)]
+  -- oldi=2, oldv=3
+  -- InsertPairAt i=2 ('c',6) -> [('a',1),('b',2),('c',6),('d',4),('e',5)]
+  -- InsertPairAt i=1 ('c',6) -> [('a',1),('c',6),('b',2),        ('d',4),('e',5)]
+  -- InsertPairAt i=4 ('c',6) -> [('a',1),('b',2),        ('d',4),('c',6),('e',5)]
   insertPairAt :: Int -> (k, v) -> o v -> o v
   insertPairAt i (k, v) o =
     case keyView k o of
