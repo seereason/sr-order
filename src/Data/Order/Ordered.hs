@@ -417,6 +417,21 @@ instance One (Set UserId) where
   one = Set.singleton
 -}
 
+-- This belongs in the sr-order library.
+mapOrderKeys :: (Ordered o k v, Eq k, Ord k) => (v -> v -> v) -> (k -> k) -> o v -> o v
+mapOrderKeys with f o =
+  Prelude.foldr doPair mempty (pairs o)
+  where
+    doPair (k, v) o | k == f k = cons (k, v) o
+    doPair (k, v) o =
+      let k' = f k in
+        if k == k'
+        then cons (k, v) o -- this key is not affected
+        else -- key changed: k -> k'
+          case view (at k') o of -- is new key already present?
+               Nothing -> cons (k', v) o -- No, insert v with the updated key
+               Just v' -> over (ix k') (with v) o -- Modify value using the 'with' function
+
 -- | Lookup key by position.  A lookup function appears in
 -- containers in version 0.5.8.
 lookupKey :: Ordered o k v => Int -> o v -> Maybe k
