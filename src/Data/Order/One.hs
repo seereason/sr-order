@@ -1,7 +1,10 @@
 module Data.Order.One
   ( One(OneItem, one)
+  , tellone
   ) where
 
+import Control.Monad.Writer (MonadWriter, tell)
+import Data.Map as Map (Map, singleton)
 import Data.Set as Set (Set, singleton)
 
 -- | Copied from relude
@@ -19,3 +22,10 @@ instance One [a] where
 instance One (Set a) where
   type OneItem (Set a) = a
   one = Set.singleton
+
+instance One (Map k v) where
+  type OneItem (Map k v) = (k, v)
+  one = uncurry Map.singleton
+
+tellone :: (MonadWriter w m, One w) => OneItem w -> m ()
+tellone = tell . one

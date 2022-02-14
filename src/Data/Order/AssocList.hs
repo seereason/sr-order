@@ -18,6 +18,8 @@ import GHC.Generics (Generic)
 import qualified Data.ListLike as LL
 import Test.QuickCheck
 
+-- We need this wrapper so we can overrride existing type
+-- families Index and Ixed associated with [a].
 newtype AssocList k a =
   AssocList {_pairs :: [(k, a)]}
   deriving (Typeable, Generic, Show, Serialize, Functor, Read, Data)
