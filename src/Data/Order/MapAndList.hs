@@ -23,20 +23,20 @@ import GHC.Generics (Generic)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 import Test.QuickCheck
 
--- | The primary instance of 'Ordered', the 'MapAndVec' type is
+-- | The primary instance of 'Ordered', the 'Order' type is
 -- similar to an association list, a combination of a 'Vector' and a
 -- 'Map'.
 --
--- 'MapAndVec' has two notions of an 'Index', the 'Int' index of the
+-- 'Order' has two notions of an 'Index', the 'Int' index of the
 -- list and the @k@ index of the map.  Here is the 'Ixed' instance
 -- for the latter, which only needs to address the '_theMap' field.
 --
 -- @
 -- λ> set (ix 'a') 30 (fromPairsUnsafe [('a',10),('b',20)])
--- fromPairsUnsafe [('a',30),('b',20)] :: MapAndVec (Char) (Integer)
+-- fromPairsUnsafe [('a',30),('b',20)] :: Order (Char) (Integer)
 -- @
 --
--- 'MapAndVec' has a fairly large number of other handy instances, for
+-- 'Order' has a fairly large number of other handy instances, for
 -- example:
 --
 -- 'Foldable', which folds over the values only
@@ -66,9 +66,9 @@ import Test.QuickCheck
 --
 -- @
 -- λ> set (at 'a') Nothing (fromPairs [('a',10),('b',20)])
--- fromPairs [('b',20)] :: MapAndVec (Char) (Integer)
+-- fromPairs [('b',20)] :: Order (Char) (Integer)
 -- λ> set (at 'b') (Just 40) (fromPairs [('a',10),('b',20)])
--- fromPairs [('a',10),('b',40)] :: MapAndVec (Char) (Integer)
+-- fromPairs [('a',10),('b',40)] :: Order (Char) (Integer)
 -- @
 --
 -- New elements appear at the end (positions of existing elements do
@@ -76,7 +76,7 @@ import Test.QuickCheck
 --
 -- @
 -- λ> set (at 'x') (Just 30) (fromPairs [('a',10),('b',20)])
--- fromPairs [('a',10),('b',20),('x',30)] :: MapAndVec (Char) (Integer)
+-- fromPairs [('a',10),('b',20),('x',30)] :: Order (Char) (Integer)
 -- @
 data MapAndList k v =
   MapAndList

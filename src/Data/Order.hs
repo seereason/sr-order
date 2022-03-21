@@ -30,8 +30,7 @@ module Data.Order
   , module Data.Order.One
   , module Data.Order.Ordered
   , module Data.Order.MapAndList
-  , module Data.Order.MapAndVec
-  , Order
+  , module Data.Order.Order
   , tests
   ) where
 
@@ -43,16 +42,12 @@ import Data.Monoid
 import Data.Order.AssocList
 import Data.Order.One
 import Data.Order.Ordered
-import Data.Order.MapAndVec
+import Data.Order.Order
 import Data.Order.MapAndList
 import Extra.QuickCheck ({-instance Monoid Result-})
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import System.Time.Extra
 import Test.QuickCheck
-
-type Order k = MapAndVec k
--- type Order k = MapAndList k
--- type Order k = AssocList k
 
 type Key = Integer
 
