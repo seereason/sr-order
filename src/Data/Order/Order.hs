@@ -107,7 +107,7 @@ instance Ord k => Sem.Semigroup (Order k v) where
       -- remove it, or create some newtypes for different
       -- interpretations.
       let v = _theVec a <> Vector.filter (\x -> Map.notMember x (_theMap a)) (_theVec b)
-          m = Map.union (_theMap b) (_theMap a) in -- prefer the values in b
+          m = Map.union (_theMap a) (_theMap b) in -- prefer the values in a
       Order m v
     -- ^ If there are any common @k@ values in the shared
     -- map the elements from the second is omitted.  For
