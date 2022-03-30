@@ -1,5 +1,5 @@
 name:               sr-order
-version:            1.11
+version:            1.11.1
 cabal-version:      >= 1.10
 build-type:         Simple
 license:            BSD3
@@ -37,7 +37,7 @@ library
     pretty,
     QuickCheck,
     safecopy,
-    sr-extra >= 1.77,
+    sr-utils >= 1.77,
     vector
   exposed-modules:
     Data.Order
