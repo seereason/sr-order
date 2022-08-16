@@ -203,8 +203,8 @@ type instance IxValue (Prepending o) = IxValue o
 instance Ixed (Order k v) => Ixed (Prepending (Order k v)) where
   ix k = #_unPrepending . ix k
 
-atOrder :: (Ord k, Functor f) => k -> (Maybe v -> f (Maybe v)) -> Order k v -> f (Order k v)
-atOrder k f o =
+atOrderPrepend :: (Ord k, Functor f) => k -> (Maybe v -> f (Maybe v)) -> Order k v -> f (Order k v)
+atOrderPrepend k f o =
         case Map.lookup k (_theMap o) of
           Just a ->
               fmap (maybe (Order (Map.delete k (_theMap o)) (Vector.filter (/= k) (_theVec o)))
@@ -215,11 +215,27 @@ atOrder k f o =
                           (\a' -> Order (Map.insert k a' (_theMap o)) (Vector.singleton k <> _theVec o)))
                    (f Nothing)
 
+atOrderAppend :: (Ord k, Functor f) => k -> (Maybe v -> f (Maybe v)) -> Order k v -> f (Order k v)
+atOrderAppend k f o =
+        case Map.lookup k (_theMap o) of
+          Just a ->
+              fmap (maybe (Order (Map.delete k (_theMap o)) (Vector.filter (/= k) (_theVec o)))
+                          (\a' -> Order (Map.insert k a' (_theMap o)) (_theVec o)))
+                   (f (Just a))
+          Nothing ->
+              fmap (maybe o
+                          (\a' -> Order (Map.insert k a' (_theMap o)) (_theVec o <> Vector.singleton k)))
+                   (f Nothing)
+
+-- Safer not to have this, but it would require a lot of changes
+instance Ord k => At (Order k a) where
+  at k = \f o -> atOrderAppend k f o
+
 instance Ord k => At (Prepending (Order k a)) where
-  at k = \f (Prepending o) -> Prepending <$> atOrder k f o
+  at k = \f (Prepending o) -> Prepending <$> atOrderPrepend k f o
 
 instance Ord k => At (Appending (Order k a)) where
-  at k = \f (Appending o) -> Appending <$> atOrder k f o
+  at k = \f (Appending o) -> Appending <$> atOrderAppend k f o
 
 instance Ord k => One (Order k v) where
   type OneItem (Order k v) = (k, v)
