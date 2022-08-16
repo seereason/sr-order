@@ -1,14 +1,17 @@
-{-# LANGUAGE CPP, DeriveGeneric, InstanceSigs, UndecidableInstances #-}
+{-# LANGUAGE CPP, DeriveGeneric, InstanceSigs, OverloadedLabels, UndecidableInstances #-}
 
 module Data.Order.Order
   ( Order(Order)
+  , Appending(..)
+  , Prepending(..)
   ) where
 
 -- import Control.Lens (_1, _2, over)
-import Control.Lens hiding (uncons, view)
+import Control.Lens hiding (uncons)
 import Data.Data (Data)
 import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
+import Data.Generics.Labels ()
 import qualified Data.ListLike as LL
 import Data.Map.Strict as Map ((!), Map)
 import qualified Data.Map.Strict as Map
@@ -187,8 +190,21 @@ instance Ord k => Ixed (Order k a) where
           Just a -> fmap (\a' -> Order (Map.insert k a' (_theMap o)) (_theVec o)) (f a)
           Nothing -> pure o
 
-instance Ord k => At (Order k a) where
-    at k f o =
+newtype Appending a = Appending {_unAppending :: a} deriving (Generic, Typeable, Show)
+newtype Prepending a = Prepending {_unPrepending :: a} deriving (Generic, Typeable, Show)
+
+type instance Index (Appending o) = Index o
+type instance IxValue (Appending o) = IxValue o
+instance Ixed (Order k v) => Ixed (Appending (Order k v)) where
+  ix k = #_unAppending . ix k
+
+type instance Index (Prepending o) = Index o
+type instance IxValue (Prepending o) = IxValue o
+instance Ixed (Order k v) => Ixed (Prepending (Order k v)) where
+  ix k = #_unPrepending . ix k
+
+atOrder :: (Ord k, Functor f) => k -> (Maybe v -> f (Maybe v)) -> Order k v -> f (Order k v)
+atOrder k f o =
         case Map.lookup k (_theMap o) of
           Just a ->
               fmap (maybe (Order (Map.delete k (_theMap o)) (Vector.filter (/= k) (_theVec o)))
@@ -198,6 +214,12 @@ instance Ord k => At (Order k a) where
               fmap (maybe o
                           (\a' -> Order (Map.insert k a' (_theMap o)) (Vector.singleton k <> _theVec o)))
                    (f Nothing)
+
+instance Ord k => At (Prepending (Order k a)) where
+  at k = \f (Prepending o) -> Prepending <$> atOrder k f o
+
+instance Ord k => At (Appending (Order k a)) where
+  at k = \f (Appending o) -> Appending <$> atOrder k f o
 
 instance Ord k => One (Order k v) where
   type OneItem (Order k v) = (k, v)
@@ -211,8 +233,13 @@ vectorUncons ks =
 {-# INLINABLE vectorUncons #-}
 
 instance (Eq k, Ord k) => Ordered (Order k) k v where
-  -- Override methods that could benefit from the At instance
-  delete k o = set (at k) Nothing o
+  -- Override methods that could benefit from the At instance.
+  delete :: k -> Order k v -> Order k v
+  delete k o =
+    -- set (at k) Nothing o
+    case view ((#_theMap :: Lens' (Order k v) (Map k v)) . at k) o of
+      Nothing -> o
+      Just (_ :: v) -> over #_theMap (Map.delete k) $ over #_theVec (deleteFirst (/= k)) o
   -- we should also do good uncons, splitAt, and break implementations here
   {-# INLINABLE delete #-}
   uncons (Order mp ks) =
@@ -243,3 +270,9 @@ instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) 
       let ks' = LL.nub ks
       (vs :: [v]) <- vector (LL.length ks')
       return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
+
+-- | Drop the first element that satisfies the predicate
+deleteFirst :: (a -> Bool) -> Vector a -> Vector a
+deleteFirst p v =
+  let (a, b) = Vector.break (not . p) v in
+    a <> Vector.drop 1 b

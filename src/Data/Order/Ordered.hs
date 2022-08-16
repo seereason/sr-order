@@ -113,7 +113,7 @@ class (FoldableWithIndex (Index (o v)) o,
        Ixed (o v),
        Index (o v) ~ k,
        IxValue (o v) ~ v,
-       At (o v),
+       -- At (o v),
        Monoid (o v),
        One (o v),
        OneItem (o v) ~ (k, v),
@@ -194,7 +194,8 @@ class (FoldableWithIndex (Index (o v)) o,
 
   delete :: k -> o v -> o v
   -- delete k o = filter (\_ k' _ -> k /= k') o
-  delete k o = set (at k) Nothing o
+  delete k o = filter (\_ k' _ -> k /= k') o
+    -- set (at k) Nothing o
 
   -- > fmap fst (uncons (fromPairs (fmap (,()) ([0..1000000] :: [Int])) :: AssocList Int ()))
   -- Just (0,())
@@ -303,7 +304,7 @@ class (FoldableWithIndex (Index (o v)) o,
   -- | Insert a pair at position n, unless the key is already present in
   -- which case update it with the combinator.
   insertPairAtWith ::
-    At (o v)
+    Ixed (o v)
     => (v -> v -> v)
     -> Int
     -> (k, v)
@@ -417,7 +418,7 @@ instance One (Set UserId) where
   one = Set.singleton
 -}
 
--- This belongs in the sr-order library.
+-- wth?
 mapOrderKeys :: (Ordered o k v, Eq k, Ord k) => (v -> v -> v) -> (k -> k) -> o v -> o v
 mapOrderKeys with f o =
   Prelude.foldr doPair mempty (pairs o)
@@ -428,7 +429,7 @@ mapOrderKeys with f o =
         if k == k'
         then cons (k, v) o -- this key is not affected
         else -- key changed: k -> k'
-          case view (at k') o of -- is new key already present?
+          case preview (ix k') o of -- is new key already present?
                Nothing -> cons (k', v) o -- No, insert v with the updated key
                Just v' -> over (ix k') (with v) o -- Modify value using the 'with' function
 
