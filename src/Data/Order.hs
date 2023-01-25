@@ -29,7 +29,7 @@ module Data.Order
   ( module Data.Order.AssocList
   , module Data.Order.One
   , module Data.Order.Ordered
-  , module Data.Order.MapAndList
+  -- , module Data.Order.MapAndList
   , module Data.Order.Order
   , tests
   ) where
@@ -43,7 +43,7 @@ import Data.Order.AssocList
 import Data.Order.One
 import Data.Order.Ordered
 import Data.Order.Order
-import Data.Order.MapAndList
+-- import Data.Order.MapAndList
 import Extra.QuickCheck ({-instance Monoid Result-})
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import System.Time.Extra

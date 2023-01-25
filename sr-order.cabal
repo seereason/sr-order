@@ -45,7 +45,6 @@ library
     Data.Order.One
     Data.Order.Ordered
     Data.Order.Order
-    Data.Order.MapAndList
     Data.Order.AssocList
     Data.UList
 
