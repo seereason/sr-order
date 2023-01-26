@@ -126,9 +126,9 @@ fixMissingFromMap (m, v) =
 -- Last step - remove any duplicate keys in v.
 fixDuplicatesInVec :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
 fixDuplicatesInVec (m, v) =
-  let (goodkeys, _) = foldr collect (mempty, mempty) v
-      collect :: k -> (Vector k, [k]) -> (Vector k, [k])
-      collect k (s, d) =
+  let (goodkeys, _) = foldl collect (mempty, mempty) v
+      collect :: (Vector k, [k]) -> k -> (Vector k, [k])
+      collect (s, d) k =
         if Vector.elem k s
         then (s, d <> [k])
         else (s <> [k], d) in
