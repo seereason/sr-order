@@ -24,6 +24,7 @@ import Data.Set as Set (difference, member, notMember, Set, singleton)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
 import qualified Data.Vector as Vector
+import Debug.Trace (trace)
 import GHC.Exts (fromList, IsList, Item, toList)
 import GHC.Generics (Generic)
 import Test.QuickCheck
@@ -105,7 +106,9 @@ data Order_5 k v =
 instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order_5 k v) where version = 5; kind = extension
 instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order k v) where
   type MigrateFrom (Order k v) = Order_5 k v
-  migrate (Order_5 m v) = uncurry Order $ repair' (m, v)
+  migrate (Order_5 m v) =
+    let (m', v') = repair' (m, v) in
+      if (Map.keysSet m', v') /= (Map.keysSet m, v) then trace "Order repaired" (Order m' v') else Order m' v'
 
 repair' :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
 repair' = fixDuplicatesInVec . fixMissingFromVec . fixMissingFromMap
