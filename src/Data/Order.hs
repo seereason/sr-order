@@ -80,25 +80,34 @@ instance (Ordered o k v, Arbitrary (o v), Arbitrary k, Arbitrary v) => Arbitrary
 
 tests :: IO ([Seconds], Result)
 tests = do
+#if __GHCJS__
+  let c = 50
+      m = 500
+      d = 5000
+#else
+  let c = 1000
+      m = 10000
+      d = 100000
+#endif
   mconcat <$> sequence
-    [ quickCheckResult' $ withMaxSuccess 100 (prop_toPairs_fromPairs @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_uncons @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_splitAt @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_fromPairs @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_insert_delete @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_insert_delete_pos @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_keys @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_lookup @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_lookupKey @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 1000 (prop_lookupPair @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_next @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_null @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_singleton @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_delete @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_insertAt @(Order Key) @String)
-    , quickCheckResult' $ withMaxSuccess 100 (prop_pos_insertAt @(Order Key) @())
-    , quickCheckResult' $ withMaxSuccess 1000 (prop_repair_valid @K @V)
-    , quickCheckResult' $ withMaxSuccess 1000 (prop_valid_norepair @K @V)
+    [ quickCheckResult' $ withMaxSuccess c (prop_toPairs_fromPairs @(Order Key) @String) -- 0.452
+    , quickCheckResult' $ withMaxSuccess c (prop_uncons @(Order Key) @String) -- 0.439
+    , quickCheckResult' $ withMaxSuccess c (prop_splitAt @(Order Key) @String) -- 0.448
+    , quickCheckResult' $ withMaxSuccess c (prop_fromPairs @(Order Key) @String) -- 0.446
+    , quickCheckResult' $ withMaxSuccess c (prop_insert_delete @(Order Key) @String) -- 0.306
+    , quickCheckResult' $ withMaxSuccess c (prop_insert_delete_pos @(Order Key) @String) -- 0.300
+    , quickCheckResult' $ withMaxSuccess m (prop_keys @(Order Key) @String) -- 0.068
+    , quickCheckResult' $ withMaxSuccess m (prop_lookup @(Order Key) @String) -- 0.076
+    , quickCheckResult' $ withMaxSuccess m (prop_lookupKey @(Order Key) @String) -- 0.075
+    , quickCheckResult' $ withMaxSuccess c (prop_lookupPair @(Order Key) @String) -- 0.830
+    , quickCheckResult' $ withMaxSuccess m (prop_next @(Order Key) @String) -- 0.057
+    , quickCheckResult' $ withMaxSuccess m (prop_null @(Order Key) @String) -- 0.053
+    , quickCheckResult' $ withMaxSuccess d (prop_singleton @(Order Key) @String) -- 0.008
+    , quickCheckResult' $ withMaxSuccess m (prop_delete @(Order Key) @String) -- 0.062
+    , quickCheckResult' $ withMaxSuccess m (prop_insertAt @(Order Key) @String) -- 0.060
+    , quickCheckResult' $ withMaxSuccess m (prop_pos_insertAt @(Order Key) @()) -- 0.062
+    , quickCheckResult' $ withMaxSuccess m (prop_repair_valid @K @V) -- 0.147
+    , quickCheckResult' $ withMaxSuccess m (prop_valid_norepair @K @V) -- 0.174
     ] >>= throwResult'
 
 quickCheckResult' :: Testable prop => prop -> IO ([Seconds], Result)
