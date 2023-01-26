@@ -127,6 +127,9 @@ instance (Eq k, Ord k) => Ordered (AssocList k) k v where
   -- append -- default
   valid (AssocList prs) =
     Set.size (fromList (toList (fmap fst prs))) == length prs
+  repair (AssocList prs) =
+    -- Should Remove duplicate keys here.
+    AssocList prs
 
 instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (AssocList k v) where
   arbitrary = do
