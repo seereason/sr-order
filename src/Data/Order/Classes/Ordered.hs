@@ -44,7 +44,8 @@ module Data.Order.Classes.Ordered
             difference,
             union,
             unions,
-            valid)
+            valid,
+            repair)
   , Ordered'
 
   , toPairList -- aka pairs
@@ -365,7 +366,7 @@ class (FoldableWithIndex (Index (o v)) o,
         (r', ks')
 
   valid :: o v -> Bool
-  -- repair :: o v -> o v
+  repair :: o v -> o v
 
 headMay :: Ordered o k v => o v -> Maybe (k, v)
 headMay o = fmap fst (uncons o)

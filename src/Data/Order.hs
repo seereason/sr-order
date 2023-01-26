@@ -43,13 +43,21 @@ import Data.Order.Types.AssocList
 import Data.Order.Classes.One
 import Data.Order.Classes.Ordered
 import Data.Order.Instances.MapAndVector
--- import Data.Order.MapAndList
+import Data.Vector (Vector)
 import Extra.QuickCheck ({-instance Monoid Result-})
+import GHC.Exts (fromList)
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)
 import System.Time.Extra
 import Test.QuickCheck
 
 type Key = Integer
+
+data K = A | B | C | D | E | F | G deriving (Eq, Ord, Show, Enum, Bounded)
+data V = P | Q | R | S | T | U | V deriving (Eq, Show, Enum, Bounded)
+
+instance Arbitrary K where arbitrary = elements [minBound..maxBound]
+instance Arbitrary V where arbitrary = elements [minBound..maxBound]
+instance Arbitrary a => Arbitrary (Vector a) where arbitrary = fromList <$> arbitrary
 
 data InsertPosition k v = InsertPosition (Order k v) Int deriving Show
 
@@ -89,6 +97,8 @@ tests = do
     , quickCheckResult' $ withMaxSuccess 100 (prop_delete @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_insertAt @(Order Key) @String)
     , quickCheckResult' $ withMaxSuccess 100 (prop_pos_insertAt @(Order Key) @())
+    , quickCheckResult' $ withMaxSuccess 1000 (prop_repair_valid @K @V)
+    , quickCheckResult' $ withMaxSuccess 1000 (prop_valid_norepair @K @V)
     ] >>= throwResult'
 
 quickCheckResult' :: Testable prop => prop -> IO ([Seconds], Result)

@@ -1,13 +1,9 @@
 -- | The type 'Order' is an instance of 'Ordered' consisting of a
 -- 'Map' and a 'Vector'.
 
-{-# LANGUAGE CPP, DeriveGeneric, InstanceSigs, OverloadedLabels, UndecidableInstances #-}
+{-# LANGUAGE CPP, DeriveGeneric, InstanceSigs, OverloadedLabels, OverloadedLists, UndecidableInstances #-}
 
-module Data.Order.Instances.MapAndVector
-  ( Order(Order)
-  , Appending(..)
-  , Prepending(..)
-  ) where
+module Data.Order.Instances.MapAndVector where
 
 -- import Control.Lens (_1, _2, over)
 import Control.Lens hiding (uncons)
@@ -24,12 +20,13 @@ import Data.Order.Classes.Ordered
 import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
-import Data.Set as Set (difference, insert, member, Set, singleton)
+import Data.Set as Set (difference, member, notMember, Set, singleton)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
 import qualified Data.Vector as Vector
 import GHC.Exts (fromList, IsList, Item, toList)
 import GHC.Generics (Generic)
+import Test.QuickCheck
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 import Test.QuickCheck
 
@@ -108,30 +105,31 @@ data Order_5 k v =
 instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order_5 k v) where version = 5; kind = extension
 instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order k v) where
   type MigrateFrom (Order k v) = Order_5 k v
-  migrate (Order_5 m v) = repair (Order m v)
+  migrate (Order_5 m v) = uncurry Order $ repair' (m, v)
 
-repair :: Ord k => Order k v -> Order k v
-repair {-(Order (m :: Map k v) (v :: Vector k))-} =
-  fixMissingFromVec . fixMissingFromMap . fixDuplicatesInVec
-  where
-    -- Fix keys in m missing from v (Add keys to end of v)
-    fixMissingFromVec (Order m v) =
-      let missing = convertList (Set.difference (Map.keysSet m) (convertList v)) in
-        Order m (v <> missing)
-    -- Fix keys in v missing from m (Remove them)
-    fixMissingFromMap (Order m v) =
-      let missing = Set.difference (convertList v) (Map.keysSet m) in
-        Order (filterWithKey (\k _ -> Set.member k missing) m) v
-    -- Fix duplicate keys in v (allocate new keys)
-    fixDuplicatesInVec (Order m v) =
-      let (keys, oldkeys) =
-            foldr (\k (s, d) ->
-                     if Set.member k s
-                     then (s, d <> [k])
-                     else (Set.insert k s, d)) (mempty, mempty) v
-          oldvals = mapMaybe (`Map.lookup` m) oldkeys
-      in
-        Order m v
+repair' :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
+repair' = fixDuplicatesInVec . fixMissingFromVec . fixMissingFromMap
+
+-- Any keys present in m but missing from v are added to the end of v.
+fixMissingFromVec :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
+fixMissingFromVec (m, v) =
+  let missing = convertList (Set.difference (Map.keysSet m) (convertList v)) in
+    (m, v <> missing)
+-- Any keys present in v but missing from m are removed.
+fixMissingFromMap :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
+fixMissingFromMap (m, v) =
+  let missing = Set.difference (convertList v) (Map.keysSet m) in
+    (m, Vector.filter (`Set.notMember` missing) v)
+-- Last step - remove any duplicate keys in v.
+fixDuplicatesInVec :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
+fixDuplicatesInVec (m, v) =
+  let (goodkeys, _) = foldr collect (mempty, mempty) v
+      collect :: k -> (Vector k, [k]) -> (Vector k, [k])
+      collect k (s, d) =
+        if Vector.elem k s
+        then (s, d <> [k])
+        else (s <> [k], d) in
+    (m, goodkeys)
 
 partitionDuplicates :: Eq k => Vector k -> (Vector k, Vector k)
 partitionDuplicates v =
@@ -146,7 +144,7 @@ data Order k v =
     , _theVec :: Vector k
     } deriving (Generic, Data, Typeable, Functor, Read)
 
-instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order k v) where version = 5; kind = extension
+instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order k v) where version = 6; kind = extension
 
 instance Ord k => Sem.Semigroup (Order k v) where
     (<>) a b =
@@ -333,6 +331,8 @@ instance (Eq k, Ord k) => Ordered (Order k) k v where
   valid (Order m v) =
     Map.keysSet m == (convertList v :: Set k) &&
     Vector.null (snd (partitionDuplicates v))
+  repair (Order m v) =
+    uncurry Order $ repair' (m, v)
 
 instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
@@ -340,6 +340,17 @@ instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) 
       let ks' = LL.nub ks
       (vs :: [v]) <- vector (LL.length ks')
       return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
+
+-- | Make sure repairing an arbitrary Map and Vector results in a valid Order.
+prop_repair_valid :: forall (k :: *) (v :: *). Ord k => (Map k v, Vector k) -> Bool
+prop_repair_valid (m, v) = valid (uncurry Order (repair' (m, v)))
+
+-- | Valid orders must be unchanged by repair, invalid orders must be changed.
+prop_valid_norepair :: forall (k :: *) (v :: *). (Ord k, Eq v) => (Map k v, Vector k) -> Bool
+prop_valid_norepair (m, v) =
+  case valid (Order m v) of
+    True -> repair' (m, v) == (m, v)
+    False -> repair' (m, v) /= (m, v)
 
 -- | Drop the first element that satisfies the predicate
 deleteFirst :: (a -> Bool) -> Vector a -> Vector a
