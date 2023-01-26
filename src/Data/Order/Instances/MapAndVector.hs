@@ -19,7 +19,7 @@ import qualified Data.ListLike as LL
 import Data.Map.Strict as Map ((!), Map, member)
 import qualified Data.Map.Strict as Map
 import Data.Order.Classes.One (One(OneItem, one))
-import Data.Order.Classes.Ordered hiding ((!))
+import Data.Order.Classes.Ordered
 import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))

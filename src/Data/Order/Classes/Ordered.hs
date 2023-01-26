@@ -7,54 +7,52 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Data.Order.Classes.Ordered
-  ( Ordered
+  ( Ordered(pairs,
+            toMap,
+            keys,
+            keysSet,
+            fromPairs,
+            values,
+            member,
+            pos,
+            keyView,
+            Data.Order.Classes.Ordered.singleton,
+            cons,
+            uncons,
+            delete,
+            deleteAt,
+            splitAt,
+            splitAtExactMay,
+            break,
+            takeWhile,
+            dropWhile,
+            take,
+            takeExactMay,
+            drop,
+            dropExactMay,
+            lookupPair,
+            lookup,
+            partition,
+            filter,
+            insertPairAt,
+            insertPairAtWith,
+            permute,
+            Data.Order.Classes.Ordered.sortBy,
+            next,
+            insertAt,
+            append,
+            difference,
+            union,
+            unions)
   , Ordered'
-  , pairs
-  , toMap
-  , toPairList
-  , keys
-  , keysSet
-  , fromPairs
-  , values
-  , member
-  , pos
-  , keyView
-  , Data.Order.Classes.Ordered.singleton
-  , cons
-  -- * With At constraint
-  , uncons
-  , delete
-  , deleteAt
-  , splitAt
-  , splitAtExactMay
-  , break
-  , takeWhile
-  , dropWhile
+
+  , toPairList -- aka pairs
   , headMay
   , tailMay
-  , take
-  , takeExactMay
-  , drop
-  , dropExactMay
-  , lookupPair
-  , lookup
-  , (!)
-  , partition
-  , filter
-  , insertPairAt
-  , insertPairAtWith
   , overPairs
   , ioverPairs
-  , permute
-  , Data.Order.Classes.Ordered.sortBy
-  -- * With Enum constraint
-  , next
-  , insertAt
-  , append
-  , difference
-  , union
-  , unions
   , lookupKey
+
   , prop_fromPairs
   , prop_keys
   , prop_splitAt
@@ -76,7 +74,7 @@ module Data.Order.Classes.Ordered
 --import Debug.Trace
 import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
-import Data.Maybe (fromJust, fromMaybe, isNothing)
+import Data.Maybe (fromJust, isNothing)
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Proxy
 import qualified Data.Map as Map (Map, insert)
@@ -188,9 +186,6 @@ class (FoldableWithIndex (Index (o v)) o,
   -- | Like Map.lookup.
   lookup :: k ~ Index (o v) => k -> o v -> Maybe v
   lookup k = preview (ix k)
-
-  (!) :: k ~ Index (o v) => k -> o v -> v
-  o ! k = fromMaybe (error "Order.!: given key is not an element in the map") (lookup o k)
 
   delete :: k -> o v -> o v
   -- delete k o = filter (\_ k' _ -> k /= k') o
@@ -395,43 +390,6 @@ ioverPairs f o = foldr g mempty (zip [0..] (pairs o))
   where
     -- g :: (Int, (k, v)) -> o' v' -> o' v'
     g (i, (k, v)) r = one (f i (k, v)) <> r
-
-{-
--- This doesn't work because it provokes v ~ (Int, v).  Don't even
--- try.
-
-instance (FoldableWithIndex (Index [v]) [],
-          Ixed [v],
-          Index [v] ~ k,
-          IxValue [v] ~ v,
-          Monoid [v],
-          One [v],
-          OneItem [v] ~ (k, v),
-          Eq k, Ord k) => Ordered [] Int v where
--}
-
-{-
-instance Ordered Set UserId ()
-
-instance One (Set UserId) where
-  type OneItem (Set UserId) = (UserId, ())
-  one = Set.singleton
--}
-
--- wth?
-mapOrderKeys :: (Ordered o k v, Eq k, Ord k) => (v -> v -> v) -> (k -> k) -> o v -> o v
-mapOrderKeys with f o =
-  Prelude.foldr doPair mempty (pairs o)
-  where
-    doPair (k, v) o | k == f k = cons (k, v) o
-    doPair (k, v) o =
-      let k' = f k in
-        if k == k'
-        then cons (k, v) o -- this key is not affected
-        else -- key changed: k -> k'
-          case preview (ix k') o of -- is new key already present?
-               Nothing -> cons (k', v) o -- No, insert v with the updated key
-               Just v' -> over (ix k') (with v) o -- Modify value using the 'with' function
 
 -- | Lookup key by position.  A lookup function appears in
 -- containers in version 0.5.8.
