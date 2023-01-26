@@ -12,16 +12,16 @@ import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import Data.Generics.Labels ()
 import qualified Data.ListLike as LL
-import Data.Map.Strict as Map (Map, filterWithKey, member)
+import Data.Map.Strict as Map (Map, filterWithKey, fromSet, mapKeys, member)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (isJust, mapMaybe)
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Order.Classes.Ordered
 import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
 import Data.Set as Set (difference, member, notMember, Set, singleton)
-import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
+import Data.Typeable (Proxy(Proxy), Typeable, typeOf, typeRep)
 import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
 import qualified Data.Vector as Vector
 import Debug.Trace (trace)
@@ -108,7 +108,9 @@ instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order k v) where
   type MigrateFrom (Order k v) = Order_5 k v
   migrate (Order_5 m v) =
     let (m', v') = repair' (m, v) in
-      if (Map.keysSet m', v') /= (Map.keysSet m, v) then trace "Order repaired" (Order m' v') else Order m' v'
+      if (Map.keysSet m', v') /= (Map.keysSet m, v)
+      then trace ("Order repaired: " <> show (orderSchema (Order m v)) <> " -> " <> show (orderSchema (Order m' v'))) (Order m' v')
+      else Order m' v'
 
 repair' :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
 repair' = fixDuplicatesInVec . fixMissingFromVec . fixMissingFromMap
@@ -173,11 +175,36 @@ instance (Ord k) => Monoid (Order k v) where
     mappend = (<>)
 #endif
 
+orderSchema :: forall k v. Ord k => Order k v -> Order Int Bool
+orderSchema (Order m v) =
+  Order m''' v'
+  where
+    m' :: Map k (Maybe v)
+    m' = fmap Just m <> fromSet (const Nothing) (convertList v)
+    ks :: [k]
+    ks = Map.keys m'
+    vs :: [Maybe v]
+    vs = fmap (\k -> Map.findWithDefault Nothing k m') ks
+    km :: Map k Int
+    km = Map.fromList (zip ks [1..])
+    v' :: Vector Int
+    v' = fmap (\k -> case Map.lookup k km of
+                       Nothing -> error "orderSchema"
+                       Just n -> n) v
+    m'' :: Map Int (Maybe v)
+    m'' = mapKeys (\k -> case Map.lookup k km of
+                           Nothing -> error "orderSchema"
+                           Just n -> n) m'
+    m''' :: Map Int Bool
+    m''' = fmap isJust m''
+
 instance (Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
   foldl f r0 o = Foldable.foldl g r0 (_theVec o)
-    where g r k = maybe (error "Internal Order error in FoldableLL.foldl") (\v -> f r (k, v)) (Map.lookup k (_theMap o))
+    where g r k = maybe (error msg) {-r-} (\v -> f r (k, v)) (Map.lookup k (_theMap o))
+          msg = "Internal Order error in FoldableLL.foldl, orderSchema=" <> show (orderSchema o)
   foldr f r0 o = Foldable.foldr g r0 (_theVec o)
-    where g k r = maybe (error "Internal Order error in FoldableLL.foldr") (\v -> f (k, v) r) (Map.lookup k (_theMap o))
+    where g k r = maybe (error msg) {-r-} (\v -> f (k, v) r) (Map.lookup k (_theMap o))
+          msg = "Internal Order error in FoldableLL.foldr, orderSchema=" <> show (orderSchema o)
 
 instance SafeCopy (Order k v) => Serialize (Order k v) where
     put = safePut
@@ -201,15 +228,17 @@ instance forall k v. (Ord k, Pretty k, Pretty v, Typeable k, Typeable v) => Pret
 -- λ> foldMap id (fromList [(1, "a"), (2, "b")])
 -- "ab"
 -- @@
-instance Ord k => Foldable (Order k) where
+instance (Ord k{-, Typeable k-}) => Foldable (Order k) where
   foldMap f o = Foldable.foldMap g (_theVec o)
-    where g k = maybe (error "Internal Order error in Foldable.foldMap") f (Map.lookup k (_theMap o))
+    where g k = maybe (error msg) {-mempty-} f (Map.lookup k (_theMap o))
+          msg = "Internal Order error in Foldable.foldMap, orderSchema=" <> show (orderSchema o)
   null o = null (_theVec o)
   length o = length (_theVec o)
 
-instance Ord k => FoldableWithIndex k (Order k) where
+instance (Ord k{-, Typeable k-}) => FoldableWithIndex k (Order k) where
   ifoldMap f o = Foldable.foldMap g (_theVec o)
-    where g k = maybe (error "Internal Order error in FoldableWithIndex.ifoldMap") (f k) (Map.lookup k (_theMap o))
+    where g k = maybe (error msg) {-mempty-} (f k) (Map.lookup k (_theMap o))
+          msg = "Internal Order error in FoldableWithIndex.ifoldMap, orderSchema=" <> show (orderSchema o)
 
 instance FunctorWithIndex k (Order k) where
     imap f o = Order (Map.mapWithKey f (_theMap o)) (_theVec o)
@@ -221,10 +250,10 @@ instance (Ord k, Eq v) => Eq (Order k v) where
 instance (Ord k, Eq v, Ord v) => Ord (Order k v) where
     compare a b = compare (_theVec a) (_theVec b) <> compare (_theMap a) (_theMap b)
 
-instance (Ord k) => Traversable (Order k) where
+instance (Ord k{-, Typeable k-}) => Traversable (Order k) where
     traverse f o = Order <$> traverse f (_theMap o) <*> pure (_theVec o)
 
-instance (Ord k) => TraversableWithIndex k (Order k) where
+instance (Ord k{-, Typeable k-}) => TraversableWithIndex k (Order k) where
     itraverse f o = Order <$> itraverse (\k a -> f k a) (_theMap o) <*> pure (_theVec o)
 
 type instance Index (Order k a) = k
@@ -282,7 +311,7 @@ instance Ord k => At (Prepending (Order k a)) where
 instance Ord k => At (Appending (Order k a)) where
   at k = \f (Appending o) -> Appending <$> atOrderAppend k f o
 
-instance Ord k => One (Order k v) where
+instance (Ord k{-, Typeable k-}) => One (Order k v) where
   type OneItem (Order k v) = (k, v)
   one (k, v) = fromPairs [(k, v)]
 
@@ -293,7 +322,7 @@ vectorUncons ks =
     Just k -> Just (k, Vector.tail ks)
 {-# INLINABLE vectorUncons #-}
 
-instance (Eq k, Ord k) => Ordered (Order k) k v where
+instance (Eq k, Ord k{-, Typeable k-}) => Ordered (Order k) k v where
   -- Override methods that could benefit from the At instance.
   delete :: k -> Order k v -> Order k v
   delete k o =
@@ -337,7 +366,7 @@ instance (Eq k, Ord k) => Ordered (Order k) k v where
   repair (Order m v) =
     uncurry Order $ repair' (m, v)
 
-instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
+instance (Ord k{-, Typeable k-}, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
       let ks' = LL.nub ks
@@ -345,11 +374,11 @@ instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) 
       return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
 
 -- | Make sure repairing an arbitrary Map and Vector results in a valid Order.
-prop_repair_valid :: forall (k :: *) (v :: *). Ord k => (Map k v, Vector k) -> Bool
+prop_repair_valid :: forall (k :: *) (v :: *). (Ord k{-, Typeable k-}) => (Map k v, Vector k) -> Bool
 prop_repair_valid (m, v) = valid (uncurry Order (repair' (m, v)))
 
 -- | Valid orders must be unchanged by repair, invalid orders must be changed.
-prop_valid_norepair :: forall (k :: *) (v :: *). (Ord k, Eq v) => (Map k v, Vector k) -> Bool
+prop_valid_norepair :: forall (k :: *) (v :: *). (Ord k, Eq v{-, Typeable k-}) => (Map k v, Vector k) -> Bool
 prop_valid_norepair (m, v) =
   case valid (Order m v) of
     True -> repair' (m, v) == (m, v)
