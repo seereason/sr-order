@@ -2,12 +2,12 @@
 {-# OPTIONS -Wmissing-signatures #-}
 
 import Control.Lens
-import Control.Monad.Extra (ifM)
+-- import Control.Monad.Extra (ifM)
 import Control.Monad.State
 import Data.Order as Order
 import System.Exit
-import System.IO
-import System.Time.Extra
+-- import System.IO
+-- import System.Time.Extra
 import Test.QuickCheck
 import Data.Map as Map
 import Text.Printf

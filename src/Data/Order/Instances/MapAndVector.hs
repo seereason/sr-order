@@ -16,7 +16,7 @@ import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import Data.Generics.Labels ()
 import qualified Data.ListLike as LL
-import Data.Map.Strict as Map ((!), Map)
+import Data.Map.Strict as Map ((!), Map, member)
 import qualified Data.Map.Strict as Map
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Order.Classes.Ordered hiding ((!))
@@ -40,8 +40,8 @@ import Test.QuickCheck
 -- for the latter, which only needs to address the '_theMap' field.
 --
 -- @
--- λ> set (ix 'a') 30 (fromPairsUnsafe [('a',10),('b',20)])
--- fromPairsUnsafe [('a',30),('b',20)] :: Order (Char) (Integer)
+-- λ> set (ix 'a') 30 (fromPairs [('a',10),('b',20)])
+-- fromPairs [('a',30),('b',20)] :: Order (Char) (Integer)
 -- @
 --
 -- 'Order' has a fairly large number of other handy instances, for
@@ -66,7 +66,7 @@ import Test.QuickCheck
 -- 'Traversable':
 --
 -- @
--- λ> traverse (++ "!") (Data.Order.fromPairsUnsafe [('a', "1"),('b',"2")] :: Order Char String)
+-- λ> traverse (++ "!") (Data.Order.fromPairs [('a', "1"),('b',"2")] :: Order Char String)
 -- [fromList [('a','1'),('b','2')], fromList [('a','1'),('b','!')],fromList [('a','!'),('b','2')],fromList [('a','!'),('b','!')]] :: [Order Char Char]
 -- @
 --
@@ -167,12 +167,6 @@ instance FunctorWithIndex k (Order k) where
     imap f o = Order (Map.mapWithKey f (_theMap o)) (_theVec o)
     {-# INLINABLE imap #-}
 
--- Not seeing what's unsafe about this
-fromPairsUnsafe :: forall t k a. (Ord k, Foldable t) => t (k, a) -> Order k a
-fromPairsUnsafe prs =
-  foldr (\(k, a) (Order m v) -> Order (Map.insert k a m) (Vector.cons k v)) mempty prs
-{-# DEPRECATED fromPairsUnsafe "Use fromPairs" #-}
-
 instance (Ord k, Eq v) => Eq (Order k v) where
   a == b = _theMap a == _theMap b && _theVec a == _theVec b
 
@@ -242,7 +236,7 @@ instance Ord k => At (Appending (Order k a)) where
 
 instance Ord k => One (Order k v) where
   type OneItem (Order k v) = (k, v)
-  one (k, v) = fromPairsUnsafe @[] [(k, v)]
+  one (k, v) = fromPairs [(k, v)]
 
 vectorUncons :: Vector a -> Maybe (a, Vector a)
 vectorUncons ks =
@@ -277,8 +271,11 @@ instance (Eq k, Ord k) => Ordered (Order k) k v where
       (mp1, mp2) = Map.partitionWithKey (\k _ -> Set.member k kset) mp
   {-# INLINABLE splitAt #-}
   fromPairs prs =
-    -- Order (Map.fromList prs) (GHC.fromList (fmap fst prs))
-    foldr (\(k, a) (Order m v) -> Order (Map.insert k a m) (Vector.cons k v)) mempty prs
+    -- Make sure that no duplicate keys make it into theVec.
+    foldr (\(k, a) (Order m v) ->
+                      case Map.member k m of
+                        True -> Order m v
+                        False -> Order (Map.insert k a m) (Vector.cons k v)) mempty prs
   {-# INLINABLE fromPairs #-}
   pos k (Order _ v) = Vector.findIndex (== k) v
   {-# INLINABLE pos #-}
