@@ -26,11 +26,11 @@
 -- ListLike instance that treats it as a sequence of (k, a) pairs.
 
 module Data.Order
-  ( module Data.Order.AssocList
-  , module Data.Order.One
-  , module Data.Order.Ordered
+  ( module Data.Order.Types.AssocList
+  , module Data.Order.Classes.One
+  , module Data.Order.Classes.Ordered
   -- , module Data.Order.MapAndList
-  , module Data.Order.Order
+  , module Data.Order.Instances.MapAndVector
   , tests
   ) where
 
@@ -39,10 +39,10 @@ import Control.Lens (over, _1)
 import qualified Data.Foldable as Foldable
 import Data.Int
 import Data.Monoid
-import Data.Order.AssocList
-import Data.Order.One
-import Data.Order.Ordered
-import Data.Order.Order
+import Data.Order.Types.AssocList
+import Data.Order.Classes.One
+import Data.Order.Classes.Ordered
+import Data.Order.Instances.MapAndVector
 -- import Data.Order.MapAndList
 import Extra.QuickCheck ({-instance Monoid Result-})
 import Prelude hiding (break, drop, filter, foldMap, length, lookup, map, take, zip)

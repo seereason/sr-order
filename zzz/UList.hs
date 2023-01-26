@@ -1,4 +1,4 @@
--- | A list whose elements are always unique.  
+-- | A list whose elements are always unique.
 
 {-# LANGUAGE DeriveAnyClass, DeriveDataTypeable, DeriveGeneric, FlexibleInstances, MultiParamTypeClasses, TypeFamilies #-}
 

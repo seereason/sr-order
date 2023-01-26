@@ -1,6 +1,9 @@
+-- | The type 'Order' is an instance of 'Ordered' consisting of a
+-- 'Map' and a 'Vector'.
+
 {-# LANGUAGE CPP, DeriveGeneric, InstanceSigs, OverloadedLabels, UndecidableInstances #-}
 
-module Data.Order.Order
+module Data.Order.Instances.MapAndVector
   ( Order(Order)
   , Appending(..)
   , Prepending(..)
@@ -15,8 +18,8 @@ import Data.Generics.Labels ()
 import qualified Data.ListLike as LL
 import Data.Map.Strict as Map ((!), Map)
 import qualified Data.Map.Strict as Map
-import Data.Order.One (One(OneItem, one))
-import Data.Order.Ordered hiding ((!))
+import Data.Order.Classes.One (One(OneItem, one))
+import Data.Order.Classes.Ordered hiding ((!))
 import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))

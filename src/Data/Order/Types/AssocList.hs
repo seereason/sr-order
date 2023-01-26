@@ -2,14 +2,14 @@
 
 {-# LANGUAGE DeriveAnyClass, TemplateHaskell, UndecidableInstances #-}
 
-module Data.Order.AssocList
+module Data.Order.Types.AssocList
   ( AssocList(..)
   ) where
 
 import Control.Lens hiding (cons, uncons)
 import Data.Data (Data)
-import Data.Order.One
-import Data.Order.Ordered
+import Data.Order.Classes.One
+import Data.Order.Classes.Ordered
 import Data.Set as Set (fromList)
 import Data.Serialize (Serialize)
 import Data.List (sortBy)

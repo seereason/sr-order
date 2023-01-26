@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Data.Order.Ordered
+module Data.Order.Classes.Ordered
   ( Ordered
   , Ordered'
   , pairs
@@ -19,7 +19,7 @@ module Data.Order.Ordered
   , member
   , pos
   , keyView
-  , Data.Order.Ordered.singleton
+  , Data.Order.Classes.Ordered.singleton
   , cons
   -- * With At constraint
   , uncons
@@ -46,7 +46,7 @@ module Data.Order.Ordered
   , overPairs
   , ioverPairs
   , permute
-  , Data.Order.Ordered.sortBy
+  , Data.Order.Classes.Ordered.sortBy
   -- * With Enum constraint
   , next
   , insertAt
@@ -77,7 +77,7 @@ module Data.Order.Ordered
 import Control.Lens hiding (cons, Indexed, uncons)
 import Data.List ((\\), nub, sortBy)
 import Data.Maybe (fromJust, fromMaybe, isNothing)
-import Data.Order.One (One(OneItem, one))
+import Data.Order.Classes.One (One(OneItem, one))
 import Data.Proxy
 import qualified Data.Map as Map (Map, insert)
 import Data.Set as Set (fromList, insert, notMember, Set)
@@ -447,7 +447,7 @@ prop_keys o = keysSet o == Set.fromList (keys o)
 prop_splitAt :: forall o v k. (Ordered o k v, k ~ Index (o v), Eq (o v)) => o v -> Property
 prop_splitAt o =
   forAll (choose (0, length o)) $ \i ->
-  let (a, b) = Data.Order.Ordered.splitAt i o in
+  let (a, b) = Data.Order.Classes.Ordered.splitAt i o in
     o == (a <> b)
 
 prop_next :: forall o v k. (Ordered o k v, Enum k) => o v -> Bool

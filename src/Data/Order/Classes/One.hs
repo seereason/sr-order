@@ -1,4 +1,4 @@
-module Data.Order.One
+module Data.Order.Classes.One
   ( One(OneItem, one)
   , tellone
   ) where
