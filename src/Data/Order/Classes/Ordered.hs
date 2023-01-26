@@ -81,6 +81,7 @@ import Data.Order.Classes.One (One(OneItem, one))
 import Data.Proxy
 import qualified Data.Map as Map (Map, insert)
 import Data.Set as Set (fromList, insert, notMember, Set)
+import Data.Typeable (Typeable)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
 
@@ -117,7 +118,8 @@ class (FoldableWithIndex (Index (o v)) o,
        Monoid (o v),
        One (o v),
        OneItem (o v) ~ (k, v),
-       Eq k, Ord k
+       Eq k, Ord k,
+       Typeable k, Typeable v, Typeable (o v)
       ) => Ordered o k v where
 
   -- | Return the key value pairs in order.

@@ -43,6 +43,7 @@ import Data.Order.Types.AssocList
 import Data.Order.Classes.One
 import Data.Order.Classes.Ordered
 import Data.Order.Instances.MapAndVector
+import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Extra.QuickCheck ({-instance Monoid Result-})
 import GHC.Exts (fromList)
@@ -66,7 +67,7 @@ data ElementPosition o k v = ElementPosition (o v) (Maybe Int) deriving Show
 -- Quickcheck
 
 -- Build an arbitrary order and a valid insert position for that order
-instance (Ord k, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
+instance (Ord k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
       InsertPosition o <$> choose (0, Foldable.length o)

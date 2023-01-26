@@ -12,9 +12,9 @@ import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import Data.Generics.Labels ()
 import qualified Data.ListLike as LL
-import Data.Map.Strict as Map (Map, filterWithKey, fromSet, mapKeys, member)
+import Data.Map.Strict as Map (Map, {-filterWithKey,-} fromSet, mapKeys, member)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (isJust, mapMaybe)
+import Data.Maybe (isJust)
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Order.Classes.Ordered
 import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
@@ -29,7 +29,7 @@ import GHC.Exts (fromList, IsList, Item, toList)
 import GHC.Generics (Generic)
 import Test.QuickCheck
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
-import Test.QuickCheck
+-- import Test.QuickCheck
 
 -- | The primary instance of 'Ordered', the 'Order' type is
 -- similar to an association list, a combination of a 'Vector' and a
@@ -109,7 +109,7 @@ instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order k v) where
   migrate (Order_5 m v) =
     let (m', v') = repair' (m, v) in
       if (Map.keysSet m', v') /= (Map.keysSet m, v)
-      then trace ("Order repaired: " <> show (orderSchema (Order m v)) <> " -> " <> show (orderSchema (Order m' v'))) (Order m' v')
+      then trace ("Order repaired: " <> show (orderSchema (Order m v)) <> " -> " <> show (orderSchema (Order m' v')) <> " :: " <> show (typeOf (Order m' v'))) (Order m' v')
       else Order m' v'
 
 repair' :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
@@ -311,7 +311,7 @@ instance Ord k => At (Prepending (Order k a)) where
 instance Ord k => At (Appending (Order k a)) where
   at k = \f (Appending o) -> Appending <$> atOrderAppend k f o
 
-instance (Ord k{-, Typeable k-}) => One (Order k v) where
+instance (Ord k, Typeable k, Typeable v) => One (Order k v) where
   type OneItem (Order k v) = (k, v)
   one (k, v) = fromPairs [(k, v)]
 
@@ -322,7 +322,7 @@ vectorUncons ks =
     Just k -> Just (k, Vector.tail ks)
 {-# INLINABLE vectorUncons #-}
 
-instance (Eq k, Ord k{-, Typeable k-}) => Ordered (Order k) k v where
+instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (Order k) k v where
   -- Override methods that could benefit from the At instance.
   delete :: k -> Order k v -> Order k v
   delete k o =
@@ -366,7 +366,7 @@ instance (Eq k, Ord k{-, Typeable k-}) => Ordered (Order k) k v where
   repair (Order m v) =
     uncurry Order $ repair' (m, v)
 
-instance (Ord k{-, Typeable k-}, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
+instance (Ord k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
       let ks' = LL.nub ks
@@ -374,11 +374,11 @@ instance (Ord k{-, Typeable k-}, Arbitrary k, Arbitrary v) => Arbitrary (Order k
       return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
 
 -- | Make sure repairing an arbitrary Map and Vector results in a valid Order.
-prop_repair_valid :: forall (k :: *) (v :: *). (Ord k{-, Typeable k-}) => (Map k v, Vector k) -> Bool
+prop_repair_valid :: forall (k :: *) (v :: *). (Ord k, Typeable k, Typeable v) => (Map k v, Vector k) -> Bool
 prop_repair_valid (m, v) = valid (uncurry Order (repair' (m, v)))
 
 -- | Valid orders must be unchanged by repair, invalid orders must be changed.
-prop_valid_norepair :: forall (k :: *) (v :: *). (Ord k, Eq v{-, Typeable k-}) => (Map k v, Vector k) -> Bool
+prop_valid_norepair :: forall (k :: *) (v :: *). (Ord k, Eq v, Typeable k, Typeable v) => (Map k v, Vector k) -> Bool
 prop_valid_norepair (m, v) =
   case valid (Order m v) of
     True -> repair' (m, v) == (m, v)
