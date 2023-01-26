@@ -112,6 +112,38 @@ instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order k v) where
       then trace ("Order repaired: " <> show (orderSchema (Order m v)) <> " -> " <> show (orderSchema (Order m' v')) <> " :: " <> show (typeOf (Order m' v'))) (Order m' v')
       else Order m' v'
 
+instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order k v) where version = 6; kind = extension
+
+data Order k v =
+  Order
+    { _theMap :: Map k v
+    , _theVec :: Vector k
+    } deriving (Generic, Data, Typeable, Functor, Read)
+
+instance Ord k => Sem.Semigroup (Order k v) where
+    (<>) a b =
+      -- If b contains keys already in a they must be removed.
+      -- Arguably, the values of matching keys are supposed to match.
+      -- This Semigroup is not really that great, I should probably
+      -- remove it, or create some newtypes for different
+      -- interpretations.
+      let v = _theVec a <> Vector.filter (\x -> Map.notMember x (_theMap a)) (_theVec b)
+          m = Map.union (_theMap a) (_theMap b) in -- prefer the values in a
+      Order m v
+    -- ^ If there are any common @k@ values in the shared
+    -- map the elements from the second is omitted.  For
+    -- this reason it is suggested that, when in doubt,
+    -- the @k@ type be mapped to @Either k k@:
+    -- @@
+    --   mapKeys Left a <> mapKeys Right b
+    -- @@
+
+instance (Ord k) => Monoid (Order k v) where
+    mempty = Order mempty mempty
+#if !(MIN_VERSION_base(4,11,0))
+    mappend = (<>)
+#endif
+
 repair' :: forall k v. Ord k => (Map k v, Vector k) -> (Map k v, Vector k)
 repair' = fixDuplicatesInVec . fixMissingFromVec . fixMissingFromMap
 
@@ -143,38 +175,6 @@ partitionDuplicates v =
           then (a, Vector.snoc b k)
           else (Vector.snoc a k, b)) (mempty, mempty) v
 
-data Order k v =
-  Order
-    { _theMap :: Map k v
-    , _theVec :: Vector k
-    } deriving (Generic, Data, Typeable, Functor, Read)
-
-instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order k v) where version = 6; kind = extension
-
-instance Ord k => Sem.Semigroup (Order k v) where
-    (<>) a b =
-      -- If b contains keys already in a they must be removed.
-      -- Arguably, the values of matching keys are supposed to match.
-      -- This Semigroup is not really that great, I should probably
-      -- remove it, or create some newtypes for different
-      -- interpretations.
-      let v = _theVec a <> Vector.filter (\x -> Map.notMember x (_theMap a)) (_theVec b)
-          m = Map.union (_theMap a) (_theMap b) in -- prefer the values in a
-      Order m v
-    -- ^ If there are any common @k@ values in the shared
-    -- map the elements from the second is omitted.  For
-    -- this reason it is suggested that, when in doubt,
-    -- the @k@ type be mapped to @Either k k@:
-    -- @@
-    --   mapKeys Left a <> mapKeys Right b
-    -- @@
-
-instance (Ord k) => Monoid (Order k v) where
-    mempty = Order mempty mempty
-#if !(MIN_VERSION_base(4,11,0))
-    mappend = (<>)
-#endif
-
 orderSchema :: forall k v. Ord k => Order k v -> Order Int Bool
 orderSchema (Order m v) =
   Order m''' v'
@@ -200,11 +200,11 @@ orderSchema (Order m v) =
 
 instance (Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
   foldl f r0 o = Foldable.foldl g r0 (_theVec o)
-    where g r k = maybe (error msg) {-r-} (\v -> f r (k, v)) (Map.lookup k (_theMap o))
-          msg = "Internal Order error in FoldableLL.foldl, orderSchema=" <> show (orderSchema o)
+    where g r k = maybe {-(error msg)-} r (\v -> f r (k, v)) (Map.lookup k (_theMap o))
+          -- msg = "Internal Order error in FoldableLL.foldl, orderSchema=" <> show (orderSchema o)
   foldr f r0 o = Foldable.foldr g r0 (_theVec o)
-    where g k r = maybe (error msg) {-r-} (\v -> f (k, v) r) (Map.lookup k (_theMap o))
-          msg = "Internal Order error in FoldableLL.foldr, orderSchema=" <> show (orderSchema o)
+    where g k r = maybe {-(error msg)-} r (\v -> f (k, v) r) (Map.lookup k (_theMap o))
+          -- msg = "Internal Order error in FoldableLL.foldr, orderSchema=" <> show (orderSchema o)
 
 instance SafeCopy (Order k v) => Serialize (Order k v) where
     put = safePut
@@ -230,15 +230,16 @@ instance forall k v. (Ord k, Pretty k, Pretty v, Typeable k, Typeable v) => Pret
 -- @@
 instance (Ord k{-, Typeable k-}) => Foldable (Order k) where
   foldMap f o = Foldable.foldMap g (_theVec o)
-    where g k = maybe (error msg) {-mempty-} f (Map.lookup k (_theMap o))
-          msg = "Internal Order error in Foldable.foldMap, orderSchema=" <> show (orderSchema o)
+    where g k = maybe {-(error msg)-} mempty f (Map.lookup k (_theMap o))
+          -- msg = "Internal Order error in Foldable.foldMap, orderSchema=" <> show (orderSchema o)
   null o = null (_theVec o)
   length o = length (_theVec o)
 
+-- Used by itraverse, pairs, toMap, etc.
 instance (Ord k{-, Typeable k-}) => FoldableWithIndex k (Order k) where
   ifoldMap f o = Foldable.foldMap g (_theVec o)
-    where g k = maybe (error msg) {-mempty-} (f k) (Map.lookup k (_theMap o))
-          msg = "Internal Order error in FoldableWithIndex.ifoldMap, orderSchema=" <> show (orderSchema o)
+    where g k = maybe {-(error msg)-}mempty (f k) (Map.lookup k (_theMap o))
+          -- msg = "Internal Order error in FoldableWithIndex.ifoldMap, orderSchema=" <> show (orderSchema o)
 
 instance FunctorWithIndex k (Order k) where
     imap f o = Order (Map.mapWithKey f (_theMap o)) (_theVec o)
