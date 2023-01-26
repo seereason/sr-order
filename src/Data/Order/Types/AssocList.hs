@@ -10,10 +10,11 @@ import Control.Lens hiding (cons, uncons)
 import Data.Data (Data)
 import Data.Order.Classes.One
 import Data.Order.Classes.Ordered
-import Data.Set as Set (fromList)
+import Data.Set as Set (fromList, size)
 import Data.Serialize (Serialize)
 import Data.List (sortBy)
 import Data.Typeable (Typeable)
+import GHC.Exts (toList)
 import GHC.Generics (Generic)
 import qualified Data.ListLike as LL
 import Test.QuickCheck
@@ -124,6 +125,8 @@ instance (Eq k, Ord k) => Ordered (AssocList k) k v where
   -- next - default
   -- insertAt - default
   -- append -- default
+  valid (AssocList prs) =
+    Set.size (fromList (toList (fmap fst prs))) == length prs
 
 instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (AssocList k v) where
   arbitrary = do

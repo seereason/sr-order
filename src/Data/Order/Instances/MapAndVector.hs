@@ -16,17 +16,19 @@ import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import Data.Generics.Labels ()
 import qualified Data.ListLike as LL
-import Data.Map.Strict as Map (Map, member)
+import Data.Map.Strict as Map (Map, filterWithKey, member)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (mapMaybe)
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Order.Classes.Ordered
 import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
-import qualified Data.Set as Set (member, singleton)
+import Data.Set as Set (difference, insert, member, Set, singleton)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
 import qualified Data.Vector as Vector
+import GHC.Exts (fromList, IsList, Item, toList)
 import GHC.Generics (Generic)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 import Test.QuickCheck
@@ -93,9 +95,50 @@ data Order_4 k v =
     } deriving (Generic, Data, Typeable, Functor, Read)
 
 instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order_4 k v) where version = 4; kind = base
+instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order_5 k v) where
+  type MigrateFrom (Order_5 k v) = Order_4 k v
+  migrate (Order_4 m v) = Order_5 m (LL.nub v)
+
+data Order_5 k v =
+  Order_5
+    { _theMap_5 :: Map k v
+    , _theVec_5 :: Vector k
+    } deriving (Generic, Data, Typeable, Functor, Read)
+
+instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order_5 k v) where version = 5; kind = extension
 instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order k v) where
-  type MigrateFrom (Order k v) = Order_4 k v
-  migrate (Order_4 m v) = Order m (LL.nub v)
+  type MigrateFrom (Order k v) = Order_5 k v
+  migrate (Order_5 m v) = repair (Order m v)
+
+repair :: Ord k => Order k v -> Order k v
+repair {-(Order (m :: Map k v) (v :: Vector k))-} =
+  fixMissingFromVec . fixMissingFromMap . fixDuplicatesInVec
+  where
+    -- Fix keys in m missing from v (Add keys to end of v)
+    fixMissingFromVec (Order m v) =
+      let missing = convertList (Set.difference (Map.keysSet m) (convertList v)) in
+        Order m (v <> missing)
+    -- Fix keys in v missing from m (Remove them)
+    fixMissingFromMap (Order m v) =
+      let missing = Set.difference (convertList v) (Map.keysSet m) in
+        Order (filterWithKey (\k _ -> Set.member k missing) m) v
+    -- Fix duplicate keys in v (allocate new keys)
+    fixDuplicatesInVec (Order m v) =
+      let (keys, oldkeys) =
+            foldr (\k (s, d) ->
+                     if Set.member k s
+                     then (s, d <> [k])
+                     else (Set.insert k s, d)) (mempty, mempty) v
+          oldvals = mapMaybe (`Map.lookup` m) oldkeys
+      in
+        Order m v
+
+partitionDuplicates :: Eq k => Vector k -> (Vector k, Vector k)
+partitionDuplicates v =
+  foldr (\k (a, b) ->
+          if Vector.elem k a
+          then (a, Vector.snoc b k)
+          else (Vector.snoc a k, b)) (mempty, mempty) v
 
 data Order k v =
   Order
@@ -284,6 +327,13 @@ instance (Eq k, Ord k) => Ordered (Order k) k v where
   pos k (Order _ v) = Vector.findIndex (== k) v
   {-# INLINABLE pos #-}
 
+  -- | Three inconsistencies may arise in this type: (1) duplicate
+  -- keys in v, (2) keys in v missing from m, (3) keys in m missing
+  -- from v.
+  valid (Order m v) =
+    Map.keysSet m == (convertList v :: Set k) &&
+    Vector.null (snd (partitionDuplicates v))
+
 instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
@@ -296,3 +346,7 @@ deleteFirst :: (a -> Bool) -> Vector a -> Vector a
 deleteFirst p v =
   let (a, b) = Vector.break (not . p) v in
     a <> Vector.drop 1 b
+
+-- | Convert between 'IsList' instances.  (Move into sr-utils.)
+convertList :: (IsList a, IsList b, Item a ~ Item b) => a -> b
+convertList = fromList . toList
