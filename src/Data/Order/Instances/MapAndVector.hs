@@ -16,7 +16,7 @@ import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
 import Data.Generics.Labels ()
 import qualified Data.ListLike as LL
-import Data.Map.Strict as Map ((!), Map, member)
+import Data.Map.Strict as Map (Map, member)
 import qualified Data.Map.Strict as Map
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Order.Classes.Ordered
@@ -130,8 +130,10 @@ instance (Ord k) => Monoid (Order k v) where
 #endif
 
 instance (Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
-    foldl f r0 xs = Foldable.foldl (\r k -> f r (k, _theMap xs ! k)) r0 (_theVec xs)
-    foldr f r0 xs = Foldable.foldr (\k r -> f (k, _theMap xs ! k) r) r0 (_theVec xs)
+  foldl f r0 o = Foldable.foldl g r0 (_theVec o)
+    where g r k = maybe (error "Internal Order error in FoldableLL.foldl") (\v -> f r (k, v)) (Map.lookup k (_theMap o))
+  foldr f r0 o = Foldable.foldr g r0 (_theVec o)
+    where g k r = maybe (error "Internal Order error in FoldableLL.foldr") (\v -> f (k, v) r) (Map.lookup k (_theMap o))
 
 instance SafeCopy (Order k v) => Serialize (Order k v) where
     put = safePut
@@ -156,12 +158,14 @@ instance forall k v. (Ord k, Pretty k, Pretty v, Typeable k, Typeable v) => Pret
 -- "ab"
 -- @@
 instance Ord k => Foldable (Order k) where
-    foldMap f o = Foldable.foldMap (\k -> f (_theMap o ! k)) (_theVec o)
-    null o = null (_theVec o)
-    length o = length (_theVec o)
+  foldMap f o = Foldable.foldMap g (_theVec o)
+    where g k = maybe (error "Internal Order error in Foldable.foldMap") f (Map.lookup k (_theMap o))
+  null o = null (_theVec o)
+  length o = length (_theVec o)
 
 instance Ord k => FoldableWithIndex k (Order k) where
-    ifoldMap f o = Foldable.foldMap (\k -> f k (_theMap o ! k)) (_theVec o)
+  ifoldMap f o = Foldable.foldMap g (_theVec o)
+    where g k = maybe (error "Internal Order error in FoldableWithIndex.ifoldMap") (f k) (Map.lookup k (_theMap o))
 
 instance FunctorWithIndex k (Order k) where
     imap f o = Order (Map.mapWithKey f (_theMap o)) (_theVec o)
