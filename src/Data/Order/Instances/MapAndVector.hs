@@ -316,6 +316,13 @@ instance (Ord k, Typeable k, Typeable v) => One (Order k v) where
   type OneItem (Order k v) = (k, v)
   one (k, v) = fromPairs [(k, v)]
 
+instance (Ord k, Typeable k, Typeable v) => IsList (Order k v) where
+  type Item (Order k v) = (k, v)
+  -- fromList :: [(k, v)] -> Order k v
+  fromList = fromPairs
+  -- toList :: Order k v -> [(k, v)]
+  toList o = pairs o
+
 vectorUncons :: Vector a -> Maybe (a, Vector a)
 vectorUncons ks =
   case ks !? 0 of
