@@ -17,7 +17,7 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust)
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Order.Classes.Ordered
-import Data.SafeCopy (base, extension, Migrate(..), SafeCopy(..), safeGet, safePut)
+import Data.SafeCopy (base, SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
 import Data.Set as Set (difference, member, notMember, Set, singleton)
@@ -86,33 +86,8 @@ import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 -- λ> set (at 'x') (Just 30) (fromPairs [('a',10),('b',20)])
 -- fromPairs [('a',10),('b',20),('x',30)] :: Order (Char) (Integer)
 -- @
-data Order_4 k v =
-  Order_4
-    { _theMap_4 :: Map k v
-    , _theVec_4 :: Vector k
-    } deriving (Generic, Data, Typeable, Functor, Read)
 
-instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order_4 k v) where version = 4; kind = base
-instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order_5 k v) where
-  type MigrateFrom (Order_5 k v) = Order_4 k v
-  migrate (Order_4 m v) = Order_5 m (LL.nub v)
-
-data Order_5 k v =
-  Order_5
-    { _theMap_5 :: Map k v
-    , _theVec_5 :: Vector k
-    } deriving (Generic, Data, Typeable, Functor, Read)
-
-instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order_5 k v) where version = 5; kind = extension
-instance (Ord k, Eq k, SafeCopy k, SafeCopy v) => Migrate (Order k v) where
-  type MigrateFrom (Order k v) = Order_5 k v
-  migrate (Order_5 m v) =
-    let (m', v') = repair' (m, v) in
-      if (Map.keysSet m', v') /= (Map.keysSet m, v)
-      then trace ("Order repaired: " <> show (orderSchema (Order m v)) <> " -> " <> show (orderSchema (Order m' v')) <> " :: " <> show (typeOf (Order m' v'))) (Order m' v')
-      else Order m' v'
-
-instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order k v) where version = 6; kind = extension
+instance (Ord k, SafeCopy k, SafeCopy v) => SafeCopy (Order k v) where version = 6; kind = base
 
 data Order k v =
   Order
