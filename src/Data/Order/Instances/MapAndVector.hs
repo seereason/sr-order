@@ -6,7 +6,7 @@
 module Data.Order.Instances.MapAndVector where
 
 -- import Control.Lens (_1, _2, over)
-import Control.Lens hiding (uncons)
+import Control.Lens hiding (cons, uncons)
 import Data.Data (Data)
 import Data.Foldable as Foldable (Foldable(foldl, foldr))
 import qualified Data.Foldable as Foldable
@@ -21,7 +21,7 @@ import Data.SafeCopy (base, SafeCopy(..), safeGet, safePut)
 import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
 import Data.Set as Set (difference, member, notMember, Set, singleton)
-import Data.Typeable (Proxy(Proxy), Typeable, typeOf, typeRep)
+import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
 import qualified Data.Vector as Vector
 import Debug.Trace (trace)
@@ -158,8 +158,6 @@ orderSchema (Order m v) =
     m' = fmap Just m <> fromSet (const Nothing) (convertList v)
     ks :: [k]
     ks = Map.keys m'
-    vs :: [Maybe v]
-    vs = fmap (\k -> Map.findWithDefault Nothing k m') ks
     km :: Map k Int
     km = Map.fromList (zip ks [1..])
     v' :: Vector Int
@@ -313,7 +311,6 @@ instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (Order k) k v where
     case view ((#_theMap :: Lens' (Order k v) (Map k v)) . at k) o of
       Nothing -> o
       Just (_ :: v) -> over #_theMap (Map.delete k) $ over #_theVec (deleteFirst (/= k)) o
-  -- we should also do good uncons, splitAt, and break implementations here
   {-# INLINABLE delete #-}
   uncons (Order mp ks) =
     case vectorUncons ks of
@@ -322,6 +319,19 @@ instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (Order k) k v where
         case Map.lookup k mp of
           Nothing -> Nothing -- error
           Just v -> Just ((k, v), Order (Map.delete k mp) ks')
+  -- we should also do good uncons, splitAt, and break implementations here
+
+  toMap :: Order k v -> Map k v
+  toMap = _theMap
+
+  toVec :: Order k v -> Vector k
+  toVec = _theVec
+
+  -- unsafe - there could be duplicates in the vector, extra or
+  -- missing keys in the map.
+  -- fromMapAndVec :: Map k v -> Vector k -> Order k v
+  -- fromMapAndVec = Order
+
   {-# INLINABLE uncons #-}
   splitAt i (Order mp ks) =
     (Order mp1 ks1, Order mp2 ks2)

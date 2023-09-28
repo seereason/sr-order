@@ -9,9 +9,11 @@
 module Data.Order.Classes.Ordered
   ( Ordered(pairs,
             toMap,
+            toVec,
             keys,
             keysSet,
             fromPairs,
+            fromMapAndVec,
             values,
             member,
             pos,
@@ -54,6 +56,7 @@ module Data.Order.Classes.Ordered
   , overPairs
   , ioverPairs
   , lookupKey
+  , elems
 
   , prop_fromPairs
   , prop_keys
@@ -79,9 +82,12 @@ import Data.List ((\\), nub, sortBy)
 import Data.Maybe (fromJust, isNothing)
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Proxy
-import qualified Data.Map as Map (Map, insert)
+import Data.Map (Map)
+import qualified Data.Map as Map (insert, lookup)
 import Data.Set as Set (fromList, insert, notMember, Set)
 import Data.Typeable (Typeable)
+import Data.Vector (Vector)
+import qualified Data.Vector as Vector (cons)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
 
@@ -127,9 +133,13 @@ class (FoldableWithIndex (Index (o v)) o,
   pairs o = ifoldr (\k v r -> (k, v) : r) [] o
   {-# INLINE pairs #-}
 
-  toMap :: o v -> Map.Map k v
+  toMap :: o v -> Map k v
   toMap o = ifoldr (\k v r -> Map.insert k v r) mempty o
   {-# INLINE toMap #-}
+
+  toVec :: o v -> Vector k
+  toVec o = ifoldr (\k _ r -> Vector.cons k r) mempty o
+  {-# INLINE toVec #-}
 
   -- FIXME: this is incredibly slow: pos 3 (fromPairs (fmap (,()) [0..10000]))
   -- Could this be lazy?  Depends on the semigroup instance I guess.
@@ -137,6 +147,11 @@ class (FoldableWithIndex (Index (o v)) o,
   fromPairs [] = mempty
   fromPairs ((k, v) : more) = one (k, v) <> fromPairs more
   {-# INLINE fromPairs #-}
+
+  -- Keys missing from m will be omitted.
+  fromMapAndVec :: Map k v -> Vector k -> o v
+  fromMapAndVec m ks =
+    foldr (\k o -> maybe o (\v -> cons (k, v) o) (Map.lookup k m)) mempty ks
 
   -- | Return the keys in order.
   keys :: o v -> [k]
@@ -402,6 +417,9 @@ ioverPairs f o = foldr g mempty (zip [0..] (pairs o))
 -- containers in version 0.5.8.
 lookupKey :: Ordered o k v => Int -> o v -> Maybe k
 lookupKey i o = fmap fst (lookupPair i o)
+
+elems :: (Ordered o k v, Typeable k, Typeable v) => o v -> [v]
+elems = values
 
 prop_fromPairs :: forall o v k. (Ordered o k v, Eq (o v), Eq k, Ord k, Eq v) => o v -> Bool
 prop_fromPairs o = fromPairs (pairs o) == o
