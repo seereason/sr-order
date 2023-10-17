@@ -14,7 +14,7 @@ import Data.Set as Set (fromList, size)
 import Data.Serialize (Serialize)
 import Data.List (sortBy)
 import Data.Typeable (Typeable)
-import GHC.Exts (toList)
+import GHC.Exts as IsList (IsList(Item, fromList, toList))
 import GHC.Generics (Generic)
 import qualified Data.ListLike as LL
 import Test.QuickCheck
@@ -126,7 +126,7 @@ instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (AssocList k) k v wher
   -- insertAt - default
   -- append -- default
   valid (AssocList prs) =
-    Set.size (fromList (toList (fmap fst prs))) == length prs
+    Set.size (IsList.fromList (fmap fst prs)) == length prs
   repair (AssocList prs) =
     -- Should Remove duplicate keys here.
     AssocList prs
@@ -137,3 +137,8 @@ instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (AssocList k
       let ks' = LL.nub ks
       (vs :: [v]) <- vector (LL.length ks')
       return (AssocList (LL.zip ks' vs))
+
+instance IsList (AssocList k v) where
+  type Item (AssocList k v) = (k, v)
+  fromList = AssocList
+  toList = _pairs
