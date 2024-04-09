@@ -317,8 +317,7 @@ class (FoldableWithIndex (Index (o v)) o,
   -- | Insert a pair at position n, unless the key is already present in
   -- which case update it with the combinator.
   insertPairAtWith ::
-    Ixed (o v)
-    => (v -> v -> v)
+       (v -> v -> v)
     -> Int
     -> (k, v)
     -> o v
@@ -417,16 +416,16 @@ ioverPairs f o = foldr g mempty (zip [0..] (pairs o))
 lookupKey :: Ordered o k v => Int -> o v -> Maybe k
 lookupKey i o = fmap fst (lookupPair i o)
 
-elems :: (Ordered o k v, Typeable k, Typeable v) => o v -> [v]
+elems :: (Ordered o k v) => o v -> [v]
 elems = values
 
-prop_fromPairs :: forall o v k. (Ordered o k v, Eq (o v), Eq k, Ord k, Eq v) => o v -> Bool
+prop_fromPairs :: forall o v k. (Ordered o k v, Eq (o v)) => o v -> Bool
 prop_fromPairs o = fromPairs (pairs o) == o
 
 prop_keys :: forall o v k. (Ordered o (Index (o v)) v, k ~ Index (o v)) => o v -> Bool
 prop_keys o = keysSet o == Set.fromList (keys o)
 
-prop_splitAt :: forall o v k. (Ordered o k v, k ~ Index (o v), Eq (o v)) => o v -> Property
+prop_splitAt :: forall o v k. (Ordered o k v, Eq (o v)) => o v -> Property
 prop_splitAt o =
   forAll (choose (0, length o)) $ \i ->
   let (a, b) = Data.Order.Classes.Ordered.splitAt i o in
@@ -435,7 +434,7 @@ prop_splitAt o =
 prop_next :: forall o v k. (Ordered o k v, Enum k) => o v -> Bool
 prop_next o = isNothing (pos (next o) o)
 
-prop_lookupKey :: forall o v k. (Ordered o k v, Arbitrary (o v), Enum k) => o v -> v -> Property
+prop_lookupKey :: forall o v k. (Ordered o k v, Enum k) => o v -> v -> Property
 prop_lookupKey o a =
   forAll (choose (0, length o)) $ \i ->
   let o' :: o v
@@ -446,7 +445,7 @@ prop_lookupKey o a =
 -- If we insert (next o, a) into o at position i, we should then find a at
 -- k in the new order and we should not find it in the original
 -- order.
-prop_lookup :: forall o v k. (Ordered o k v, Arbitrary (o v), Enum k, Eq v) => o v -> v -> Property
+prop_lookup :: forall o v k. (Ordered o k v, Enum k, Eq v) => o v -> v -> Property
 prop_lookup o v =
   forAll (choose (0, length o)) $ \i ->
   let o' = insertPairAt i (k, v) o
@@ -454,14 +453,14 @@ prop_lookup o v =
     lookup k o' == Just v && lookup k o == Nothing
 
 -- If we insert a pair at a position, lookupPair of that position must return the pair.
-prop_lookupPair :: forall o v k. (Ordered o k v, Eq (o v), Enum k, Eq v, Show k, Show v, Show (o v)) => o v -> v -> Property
+prop_lookupPair :: forall o v k. (Ordered o k v, Enum k, Eq v) => o v -> v -> Property
 prop_lookupPair o a =
   forAll (choose (0, length ({-trace ("o=" <> show o)-} o))) $ \i ->
   let o' = insertPairAt ({-trace ("i=" <> show i)-} i) ({-trace ("pair=" <> show (k, a))-} (k, a)) o
       k = next o in
   lookupPair i ({-trace ("o'=" <> show o')-} o') == Just (k, a)
 
-prop_uncons :: forall o v k. (Ordered o k v, Eq (o v), Eq v) => o v -> Bool
+prop_uncons :: forall o v k. (Ordered o k v, Eq (o v)) => o v -> Bool
 prop_uncons o = o == maybe mempty (\(pair, o') -> one pair <> o') (uncons o)
 
 prop_null :: forall o v k. Ordered o k v => o v -> Bool
@@ -474,7 +473,7 @@ prop_singleton _ pair = uncons (one pair :: o v) == Just (pair, mempty)
 
 -- | Map and list should contain the same keys with no duplicates
 prop_toPairs_fromPairs ::
-  forall o v k. (Ordered o k v, Eq (o v), Arbitrary (o v), Arbitrary k, Arbitrary v)
+  forall o v k. (Ordered o k v, Eq (o v))
   => o v
   -> Bool
 prop_toPairs_fromPairs o =
