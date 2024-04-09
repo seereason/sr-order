@@ -24,7 +24,7 @@ import Data.Set as Set (difference, member, notMember, Set, singleton)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
 import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
 import qualified Data.Vector as Vector
-import Debug.Trace (trace)
+-- import Debug.Trace (trace)
 import GHC.Exts (fromList, IsList, Item, toList)
 import GHC.Generics (Generic)
 import Test.QuickCheck

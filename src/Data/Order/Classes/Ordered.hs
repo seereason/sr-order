@@ -85,7 +85,6 @@ import Data.Proxy
 import Data.Map (Map)
 import qualified Data.Map as Map (insert, lookup)
 import Data.Set as Set (fromList, insert, notMember, Set)
-import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector (cons)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
