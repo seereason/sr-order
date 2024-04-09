@@ -124,8 +124,7 @@ class (FoldableWithIndex (Index (o v)) o,
        Monoid (o v),
        One (o v),
        OneItem (o v) ~ (k, v),
-       Eq k, Ord k,
-       Typeable k, Typeable v, Typeable (o v)
+       Eq k, Ord k
       ) => Ordered o k v where
 
   -- | Return the key value pairs in order.
