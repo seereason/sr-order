@@ -8,8 +8,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Data.Order.Classes.Ordered
-  ( Next(nextKey)
-  , Ordered(pairs,
+  ( Ordered(pairs,
             toMap,
             toVec,
             keys,
@@ -42,7 +41,6 @@ module Data.Order.Classes.Ordered
             insertPairAtWith,
             permute,
             Data.Order.Classes.Ordered.sortBy,
-            next,
             insertAt,
             append,
             difference,
@@ -51,6 +49,8 @@ module Data.Order.Classes.Ordered
             valid,
             repair)
   , Ordered'
+  , NextKey(nextKey)
+  , next
 
   , toPairList -- aka pairs
   , headMay
@@ -93,17 +93,6 @@ import qualified Data.Vector as Vector (cons)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
 
-class Next k where
-  nextKey :: Set k -> k
-  default nextKey :: Enum k => Set k -> k
-  nextKey = maybe (toEnum 0) succ . lookupMax
-
--- Some existing Enum instances
-instance Next Integer
-instance Next Char
-instance Next Int
-instance Next Word
-
 -- Ordered currently pinned to Order
 -- instance (Eq k, Ord k) => Ordered (AssocList k) k v
 
@@ -137,8 +126,7 @@ class (FoldableWithIndex (Index (o v)) o,
        Monoid (o v),
        One (o v),
        OneItem (o v) ~ (k, v),
-       Eq k, Ord k,
-       Next k
+       Eq k, Ord k
       ) => Ordered o k v where
 
   -- | Return the key value pairs in order.
@@ -342,7 +330,7 @@ class (FoldableWithIndex (Index (o v)) o,
       Just (oldi, oldv, o') ->
         insertPairAt (if i > oldi then i - 1 else i) (k, f oldv v) o'
 
-  insertAt :: Next k => Int -> v -> o v -> (o v, k)
+  insertAt :: NextKey k => Int -> v -> o v -> (o v, k)
   insertAt n a o =
     (insertPairAt n (k, a) o, k)
     where k = next o
@@ -361,18 +349,7 @@ class (FoldableWithIndex (Index (o v)) o,
     where
       cmp' k1 k2 = cmp (k1, fromJust (view (at k1) o)) (k2, fromJust (view (at k2) o))
 
-  -- | Return the next available key
-  -- @@
-  -- λ> next (AssocList [(2, "a"), (5, "b")])
-  -- 6
-  -- λ> next (AssocList ([] :: [(Int, String)]))
-  -- 0
-  -- @@
-  -- Note that this will fail if one of the keys equals maxBound
-  next :: o v -> k
-  next = nextKey . keysSet
-
-  append :: o v -> v -> (o v, k)
+  append :: NextKey k => o v -> v -> (o v, k)
   append o v = let k = next o in (o <> one (k, v), k)
 
   difference :: o v -> o v -> o v
@@ -396,6 +373,28 @@ class (FoldableWithIndex (Index (o v)) o,
 
   valid :: o v -> Bool
   repair :: o v -> o v
+
+class NextKey k where
+  nextKey :: Set k -> k
+  default nextKey :: Enum k => Set k -> k
+  nextKey = maybe (toEnum 0) succ . lookupMax
+
+-- | Return the next available key
+-- @@
+-- λ> next (AssocList [(2, "a"), (5, "b")])
+-- 6
+-- λ> next (AssocList ([] :: [(Int, String)]))
+-- 0
+-- @@
+-- Note that this will fail if one of the keys equals maxBound
+next :: (Ordered o k v, NextKey k) => o v -> k
+next = nextKey . keysSet
+
+-- Some existing Enum instances
+instance NextKey Integer
+instance NextKey Char
+instance NextKey Int
+instance NextKey Word
 
 headMay :: Ordered o k v => o v -> Maybe (k, v)
 headMay o = fmap fst (uncons o)
@@ -445,10 +444,10 @@ prop_splitAt o =
   let (a, b) = Data.Order.Classes.Ordered.splitAt i o in
     o == (a <> b)
 
-prop_next :: forall o v k. (Ordered o k v) => o v -> Bool
+prop_next :: forall o v k. (Ordered o k v, NextKey k) => o v -> Bool
 prop_next o = isNothing (pos (next o) o)
 
-prop_lookupKey :: forall o v k. (Ordered o k v) => o v -> v -> Property
+prop_lookupKey :: forall o v k. (Ordered o k v, NextKey k) => o v -> v -> Property
 prop_lookupKey o a =
   forAll (choose (0, length o)) $ \i ->
   let o' :: o v
@@ -459,7 +458,7 @@ prop_lookupKey o a =
 -- If we insert (next o, a) into o at position i, we should then find a at
 -- k in the new order and we should not find it in the original
 -- order.
-prop_lookup :: forall o v k. (Ordered o k v, Eq v) => o v -> v -> Property
+prop_lookup :: forall o v k. (Ordered o k v, NextKey k, Eq v) => o v -> v -> Property
 prop_lookup o v =
   forAll (choose (0, length o)) $ \i ->
   let o' = insertPairAt i (k, v) o
@@ -467,7 +466,7 @@ prop_lookup o v =
     lookup k o' == Just v && lookup k o == Nothing
 
 -- If we insert a pair at a position, lookupPair of that position must return the pair.
-prop_lookupPair :: forall o v k. (Ordered o k v, {-Enum k,-} Eq v) => o v -> v -> Property
+prop_lookupPair :: forall o v k. (Ordered o k v, NextKey k, Eq v) => o v -> v -> Property
 prop_lookupPair o a =
   forAll (choose (0, length ({-trace ("o=" <> show o)-} o))) $ \i ->
   let o' = insertPairAt ({-trace ("i=" <> show i)-} i) ({-trace ("pair=" <> show (k, a))-} (k, a)) o
@@ -524,7 +523,7 @@ prop_insert_delete_pos v@(k, _) o =
     forAll (choose (0, length o)) $ \i ->
         member k o || (deleteAt i (insertPairAt i v o) == o)
 
-prop_pos_insertAt :: forall o v k. (Ordered o k v{-, Enum k-}) => v -> o v -> Property
+prop_pos_insertAt :: forall o v k. (Ordered o k v, NextKey k) => v -> o v -> Property
 prop_pos_insertAt v o =
   forAll (choose (0, length o)) $ \n ->
   let (o', k) = insertAt n v o in
