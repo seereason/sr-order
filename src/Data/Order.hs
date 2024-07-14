@@ -56,6 +56,8 @@ type Key = Integer
 data K = A | B | C | D | E | F | G deriving (Eq, Ord, Show, Enum, Bounded)
 data V = P | Q | R | S | T | U | V deriving (Eq, Show, Enum, Bounded)
 
+instance Next K -- will use the default method of class Next.  Warning, will fail on G.
+
 instance Arbitrary K where arbitrary = elements [minBound..maxBound]
 instance Arbitrary V where arbitrary = elements [minBound..maxBound]
 instance Arbitrary a => Arbitrary (Vector a) where arbitrary = fromList <$> arbitrary
@@ -67,7 +69,7 @@ data ElementPosition o k v = ElementPosition (o v) (Maybe Int) deriving Show
 -- Quickcheck
 
 -- Build an arbitrary order and a valid insert position for that order
-instance (Ord k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
+instance (Ord k, Next k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary (InsertPosition k v) where
   arbitrary = do
       o <- arbitrary :: Gen (Order k v)
       InsertPosition o <$> choose (0, Foldable.length o)

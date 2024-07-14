@@ -89,7 +89,7 @@ instance One (AssocList k a) where
   type OneItem (AssocList k a) = (k, a)
   one (k, a) = AssocList [(k, a)]
 
-instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (AssocList k) k v where
+instance (Eq k, Ord k, Next k, Typeable k, Typeable v) => Ordered (AssocList k) k v where
   pairs = _pairs
   fromPairs = AssocList
   -- keys - Use default implementation for correct order

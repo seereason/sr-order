@@ -183,7 +183,7 @@ instance SafeCopy (Order k v) => Serialize (Order k v) where
     put = safePut
     get = safeGet
 
-instance forall k v. (Ord k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
+instance forall k v. (Ord k, Next k, Show k, Show v, Typeable k, Typeable v) => Show (Order k v) where
   showsPrec d o  = showParen (d > 10) $
     showString "fromPairs " .
     shows (pairs o) .
@@ -193,7 +193,7 @@ instance forall k v. (Ord k, Show k, Show v, Typeable k, Typeable v) => Show (Or
     shows (typeRep (Proxy :: Proxy v)) .
     showString ")"
 
-instance forall k v. (Ord k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (Order k v) where
+instance forall k v. (Ord k, Next k, Pretty k, Pretty v, Typeable k, Typeable v) => Pretty (Order k v) where
   pPrint o = text "Order " <> pPrint (pairs o)
 
 -- Fold over the values only
@@ -285,11 +285,11 @@ instance Ord k => At (Prepending (Order k a)) where
 instance Ord k => At (Appending (Order k a)) where
   at k = \f (Appending o) -> Appending <$> atOrderAppend k f o
 
-instance (Ord k, Typeable k, Typeable v) => One (Order k v) where
+instance (Ord k, Next k, Typeable k, Typeable v) => One (Order k v) where
   type OneItem (Order k v) = (k, v)
   one (k, v) = fromPairs [(k, v)]
 
-instance (Ord k, Typeable k, Typeable v) => IsList (Order k v) where
+instance (Ord k, Next k, Typeable k, Typeable v) => IsList (Order k v) where
   type Item (Order k v) = (k, v)
   -- fromList :: [(k, v)] -> Order k v
   fromList = fromPairs
@@ -303,7 +303,8 @@ vectorUncons ks =
     Just k -> Just (k, Vector.tail ks)
 {-# INLINABLE vectorUncons #-}
 
-instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (Order k) k v where
+instance (Eq k, Next k, Ord k, Typeable k, Typeable v) => Ordered (Order k) k v where
+
   -- Override methods that could benefit from the At instance.
   delete :: k -> Order k v -> Order k v
   delete k o =
@@ -359,7 +360,7 @@ instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (Order k) k v where
   repair (Order m v) =
     uncurry Order $ repair' (m, v)
 
-instance (Ord k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
+instance (Ord k, Next k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
       (ks :: [k]) <- (sized pure >>= \n -> vectorOf n arbitrary) >>= shuffle
       let ks' = LL.nub ks
@@ -367,11 +368,11 @@ instance (Ord k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary 
       return (fromPairs (LL.zip ks' vs :: [(k, v)]) :: Order k v)
 
 -- | Make sure repairing an arbitrary Map and Vector results in a valid Order.
-prop_repair_valid :: forall (k :: *) (v :: *). (Ord k, Typeable k, Typeable v) => (Map k v, Vector k) -> Bool
+prop_repair_valid :: forall (k :: *) (v :: *). (Ord k, Next k, Typeable k, Typeable v) => (Map k v, Vector k) -> Bool
 prop_repair_valid (m, v) = valid (uncurry Order (repair' (m, v)))
 
 -- | Valid orders must be unchanged by repair, invalid orders must be changed.
-prop_valid_norepair :: forall (k :: *) (v :: *). (Ord k, Eq v, Typeable k, Typeable v) => (Map k v, Vector k) -> Bool
+prop_valid_norepair :: forall (k :: *) (v :: *). (Ord k, Next k, Eq v, Typeable k, Typeable v) => (Map k v, Vector k) -> Bool
 prop_valid_norepair (m, v) =
   case valid (Order m v) of
     True -> repair' (m, v) == (m, v)

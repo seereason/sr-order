@@ -2,12 +2,14 @@
 -- distinct index, e.g. [(k, a)].
 
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Data.Order.Classes.Ordered
-  ( Ordered(pairs,
+  ( Next(nextKey)
+  , Ordered(pairs,
             toMap,
             toVec,
             keys,
@@ -83,12 +85,24 @@ import Data.Maybe (fromJust, isNothing)
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Proxy
 import Data.Map (Map)
+import Data.Maybe (fromMaybe)
 import qualified Data.Map as Map (insert, lookup)
-import Data.Set as Set (fromList, insert, notMember, Set)
+import Data.Set as Set (fromList, insert, lookupMax, notMember, Set)
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector (cons)
 import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
 import Test.QuickCheck
+
+class Next k where
+  nextKey :: Set k -> k
+  default nextKey :: Enum k => Set k -> k
+  nextKey = fromMaybe (toEnum 0) . lookupMax
+
+-- Some existing Enum instances
+instance Next Integer
+instance Next Char
+instance Next Int
+instance Next Word
 
 -- Ordered currently pinned to Order
 -- instance (Eq k, Ord k) => Ordered (AssocList k) k v
@@ -123,7 +137,8 @@ class (FoldableWithIndex (Index (o v)) o,
        Monoid (o v),
        One (o v),
        OneItem (o v) ~ (k, v),
-       Eq k, Ord k
+       Eq k, Ord k,
+       Next k
       ) => Ordered o k v where
 
   -- | Return the key value pairs in order.
@@ -327,7 +342,7 @@ class (FoldableWithIndex (Index (o v)) o,
       Just (oldi, oldv, o') ->
         insertPairAt (if i > oldi then i - 1 else i) (k, f oldv v) o'
 
-  insertAt :: Enum k => Int -> v -> o v -> (o v, k)
+  insertAt :: Next k => Int -> v -> o v -> (o v, k)
   insertAt n a o =
     (insertPairAt n (k, a) o, k)
     where k = next o
@@ -354,10 +369,10 @@ class (FoldableWithIndex (Index (o v)) o,
   -- 0
   -- @@
   -- Note that this will fail if one of the keys equals maxBound
-  next :: Enum k => o v -> k
-  next = foldr max (toEnum 0) . fmap succ . keys
+  next :: o v -> k
+  next = nextKey . keysSet
 
-  append :: Enum k => o v -> v -> (o v, k)
+  append :: o v -> v -> (o v, k)
   append o v = let k = next o in (o <> one (k, v), k)
 
   difference :: o v -> o v -> o v
@@ -430,10 +445,10 @@ prop_splitAt o =
   let (a, b) = Data.Order.Classes.Ordered.splitAt i o in
     o == (a <> b)
 
-prop_next :: forall o v k. (Ordered o k v, Enum k) => o v -> Bool
+prop_next :: forall o v k. (Ordered o k v) => o v -> Bool
 prop_next o = isNothing (pos (next o) o)
 
-prop_lookupKey :: forall o v k. (Ordered o k v, Enum k) => o v -> v -> Property
+prop_lookupKey :: forall o v k. (Ordered o k v) => o v -> v -> Property
 prop_lookupKey o a =
   forAll (choose (0, length o)) $ \i ->
   let o' :: o v
@@ -444,7 +459,7 @@ prop_lookupKey o a =
 -- If we insert (next o, a) into o at position i, we should then find a at
 -- k in the new order and we should not find it in the original
 -- order.
-prop_lookup :: forall o v k. (Ordered o k v, Enum k, Eq v) => o v -> v -> Property
+prop_lookup :: forall o v k. (Ordered o k v, Eq v) => o v -> v -> Property
 prop_lookup o v =
   forAll (choose (0, length o)) $ \i ->
   let o' = insertPairAt i (k, v) o
@@ -452,7 +467,7 @@ prop_lookup o v =
     lookup k o' == Just v && lookup k o == Nothing
 
 -- If we insert a pair at a position, lookupPair of that position must return the pair.
-prop_lookupPair :: forall o v k. (Ordered o k v, Enum k, Eq v) => o v -> v -> Property
+prop_lookupPair :: forall o v k. (Ordered o k v, {-Enum k,-} Eq v) => o v -> v -> Property
 prop_lookupPair o a =
   forAll (choose (0, length ({-trace ("o=" <> show o)-} o))) $ \i ->
   let o' = insertPairAt ({-trace ("i=" <> show i)-} i) ({-trace ("pair=" <> show (k, a))-} (k, a)) o
@@ -509,7 +524,7 @@ prop_insert_delete_pos v@(k, _) o =
     forAll (choose (0, length o)) $ \i ->
         member k o || (deleteAt i (insertPairAt i v o) == o)
 
-prop_pos_insertAt :: forall o v k. (Ordered o k v, Enum k) => v -> o v -> Property
+prop_pos_insertAt :: forall o v k. (Ordered o k v{-, Enum k-}) => v -> o v -> Property
 prop_pos_insertAt v o =
   forAll (choose (0, length o)) $ \n ->
   let (o', k) = insertAt n v o in
