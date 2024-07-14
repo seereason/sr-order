@@ -43,6 +43,7 @@ import Data.Order.Types.AssocList
 import Data.Order.Classes.One
 import Data.Order.Classes.Ordered
 import Data.Order.Instances.MapAndVector
+import Data.Set as Set (difference, lookupMin, Set)
 import Data.Typeable (Typeable)
 import Data.Vector (Vector)
 import Extra.QuickCheck ({-instance Monoid Result-})
@@ -56,7 +57,11 @@ type Key = Integer
 data K = A | B | C | D | E | F | G deriving (Eq, Ord, Show, Enum, Bounded)
 data V = P | Q | R | S | T | U | V deriving (Eq, Show, Enum, Bounded)
 
-instance Next K -- will use the default method of class Next.  Warning, will fail on G.
+-- Find *any* unused constructor
+instance Next K where
+  nextKey s = case lookupMin (Set.difference ([minBound..maxBound] :: Set K) s) of
+                Just a -> a
+                Nothing -> error "nextKey K"
 
 instance Arbitrary K where arbitrary = elements [minBound..maxBound]
 instance Arbitrary V where arbitrary = elements [minBound..maxBound]

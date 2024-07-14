@@ -96,7 +96,7 @@ import Test.QuickCheck
 class Next k where
   nextKey :: Set k -> k
   default nextKey :: Enum k => Set k -> k
-  nextKey = fromMaybe (toEnum 0) . lookupMax
+  nextKey = maybe (toEnum 0) succ . lookupMax
 
 -- Some existing Enum instances
 instance Next Integer
