@@ -8,15 +8,16 @@ module Data.Order.Types.AssocList
 
 import Control.Lens hiding (cons, uncons)
 import Data.Data (Data)
+import Data.List (sortBy)
 import Data.Order.Classes.One
 import Data.Order.Classes.Ordered
 import Data.Set as Set (fromList, size)
 import Data.Serialize (Serialize)
-import Data.List (sortBy)
 import Data.Typeable (Typeable)
 import GHC.Exts as IsList (IsList(Item, fromList, toList))
 import GHC.Generics (Generic)
 import qualified Data.ListLike as LL
+import Prelude hiding (reverse)
 import Test.QuickCheck
 
 -- We need this wrapper so we can overrride existing type
@@ -130,6 +131,7 @@ instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (AssocList k) k v wher
   repair (AssocList prs) =
     -- Should Remove duplicate keys here.
     AssocList prs
+  reverse (AssocList prs) = AssocList (LL.reverse prs)
 
 instance (Ord k, {-Show k,-} Arbitrary k, Arbitrary v) => Arbitrary (AssocList k v) where
   arbitrary = do

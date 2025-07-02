@@ -47,7 +47,8 @@ module Data.Order.Classes.Ordered
             union,
             unions,
             valid,
-            repair)
+            repair,
+            reverse)
   , Ordered'
   , NextKey(nextKey)
   , next
@@ -85,12 +86,12 @@ import Data.Maybe (fromJust, isNothing)
 import Data.Order.Classes.One (One(OneItem, one))
 import Data.Proxy
 import Data.Map (Map)
-import Data.Maybe (fromMaybe)
+-- import Data.Maybe (fromMaybe)
 import qualified Data.Map as Map (insert, lookup)
 import Data.Set as Set (fromList, insert, lookupMax, notMember, Set)
 import Data.Vector (Vector)
 import qualified Data.Vector as Vector (cons)
-import Prelude hiding (break, drop, dropWhile, filter, lookup, splitAt, take, takeWhile)
+import Prelude hiding (break, drop, dropWhile, filter, lookup, reverse, splitAt, take, takeWhile)
 import Test.QuickCheck
 
 -- Ordered currently pinned to Order
@@ -373,6 +374,7 @@ class (FoldableWithIndex (Index (o v)) o,
 
   valid :: o v -> Bool
   repair :: o v -> o v
+  reverse :: o v -> o v
 
 class NextKey k where
   nextKey :: Set k -> k

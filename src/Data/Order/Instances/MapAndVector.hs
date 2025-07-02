@@ -22,12 +22,13 @@ import qualified Data.Semigroup as Sem
 import Data.Serialize (Serialize(..))
 import Data.Set as Set (difference, member, notMember, Set, singleton)
 import Data.Typeable (Proxy(Proxy), Typeable, typeRep)
-import Data.Vector as Vector (Vector, splitAt {-uncons appears after 0.12.0-}, (!?))
+import Data.Vector as Vector (Vector, reverse, splitAt {-uncons appears after 0.12.0-}, (!?))
 import qualified Data.Vector as Vector
 -- import Debug.Trace (trace)
 import GHC.Exts (fromList, IsList, Item, toList)
 import GHC.Generics (Generic)
-import Test.QuickCheck
+import Prelude hiding (reverse)
+import Test.QuickCheck hiding (collect)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), text)
 -- import Test.QuickCheck
 
@@ -359,6 +360,9 @@ instance (Eq k, Ord k, Typeable k, Typeable v) => Ordered (Order k) k v where
     Vector.null (snd (partitionDuplicates v))
   repair (Order m v) =
     uncurry Order $ repair' (m, v)
+  reverse (Order m v) =
+    Order m (Vector.reverse v)
+
 
 instance (Ord k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary (Order k v) where
   arbitrary = do
