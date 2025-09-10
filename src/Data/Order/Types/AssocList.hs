@@ -1,6 +1,6 @@
 -- | A simple type that satisfies 'IndexedOrder' and 'AList'
 
-{-# LANGUAGE DeriveAnyClass, TemplateHaskell, UndecidableInstances #-}
+{-# LANGUAGE DeriveAnyClass, InstanceSigs, TemplateHaskell, UndecidableInstances #-}
 
 module Data.Order.Types.AssocList
   ( AssocList(..)
