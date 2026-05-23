@@ -29,7 +29,7 @@ library
     cereal,
     containers,
     data-default,
-    extra,
+    extra >= 1.9,
     generic-lens,
     lens,
     ListLike,
@@ -47,12 +47,14 @@ library
     Data.Order.Types.AssocList
 
 test-suite order-tests
+  if impl(ghcjs) || arch(javascript)
+    Buildable: false
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   ghc-options: -Wall -O
   hs-source-dirs: tests
   main-is: Main.hs
-  build-depends: base, containers, extra, HUnit, lens, mtl, QuickCheck, sr-order
+  build-depends: base, containers, extra >= 1.9, HUnit, lens, mtl, QuickCheck, sr-order
 
 source-repository head
   type:     git

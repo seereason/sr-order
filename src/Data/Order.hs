@@ -31,7 +31,9 @@ module Data.Order
   , module Data.Order.Classes.Ordered
   -- , module Data.Order.MapAndList
   , module Data.Order.Instances.MapAndVector
+#if !__GHCJS__ && !defined(javascript_HOST_ARCH)
   , tests
+#endif
   ) where
 
 import Control.Exception (throw)
@@ -86,6 +88,7 @@ instance (Ordered o k v, Arbitrary (o v), Arbitrary k, Arbitrary v) => Arbitrary
         0 -> return $ ElementPosition o Nothing
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
 
+#if !__GHCJS__ && !defined(javascript_HOST_ARCH)
 tests :: IO ([Seconds], Result)
 tests = do
 #if __GHCJS__
@@ -124,3 +127,4 @@ quickCheckResult' prop = over _1 (: []) <$> duration (quickCheckResult prop)
 throwResult' :: ([Seconds], Result) -> IO ([Seconds], Result)
 throwResult' (secs, result@(Success {})) = return (secs, result)
 throwResult' (_secs, result) = throw result
+#endif
