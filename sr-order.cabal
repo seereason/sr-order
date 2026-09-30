@@ -47,7 +47,7 @@ library
     Data.Order.Types.AssocList
 
 test-suite order-tests
-  if impl(ghcjs) || arch(javascript)
+  if impl(ghcjs) || (arch(javascript) || arch(wasm32))
     Buildable: false
   default-language: Haskell2010
   type: exitcode-stdio-1.0

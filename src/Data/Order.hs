@@ -31,7 +31,7 @@ module Data.Order
   , module Data.Order.Classes.Ordered
   -- , module Data.Order.MapAndList
   , module Data.Order.Instances.MapAndVector
-#if !__GHCJS__ && !defined(javascript_HOST_ARCH)
+#if !__GHCJS__ && !(defined(javascript_HOST_ARCH) || defined(wasm32_HOST_ARCH))
   , tests
 #endif
   ) where
@@ -88,7 +88,7 @@ instance (Ordered o k v, Arbitrary (o v), Arbitrary k, Arbitrary v) => Arbitrary
         0 -> return $ ElementPosition o Nothing
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
 
-#if !__GHCJS__ && !defined(javascript_HOST_ARCH)
+#if !__GHCJS__ && !(defined(javascript_HOST_ARCH) || defined(wasm32_HOST_ARCH))
 tests :: IO ([Seconds], Result)
 tests = do
 #if __GHCJS__
