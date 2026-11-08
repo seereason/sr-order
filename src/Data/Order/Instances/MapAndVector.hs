@@ -94,7 +94,7 @@ data Order k v =
   Order
     { _theMap :: Map k v
     , _theVec :: Vector k
-    } deriving (Generic, Data, Typeable, Functor, Read)
+    } deriving (Generic, Data, Functor, Read)
 
 instance Ord k => Sem.Semigroup (Order k v) where
     (<>) a b =
@@ -172,7 +172,7 @@ orderSchema (Order m v) =
     m''' :: Map Int Bool
     m''' = fmap isJust m''
 
-instance (Ord k, Monoid (Order k v)) => LL.FoldableLL (Order k v) (k, v) where
+instance Ord k => LL.FoldableLL (Order k v) (k, v) where
   foldl f r0 o = Foldable.foldl g r0 (_theVec o)
     where g r k = maybe {-(error msg)-} r (\v -> f r (k, v)) (Map.lookup k (_theMap o))
           -- msg = "Internal Order error in FoldableLL.foldl, orderSchema=" <> show (orderSchema o)
@@ -239,8 +239,8 @@ instance Ord k => Ixed (Order k a) where
           Just a -> fmap (\a' -> Order (Map.insert k a' (_theMap o)) (_theVec o)) (f a)
           Nothing -> pure o
 
-newtype Appending a = Appending {_unAppending :: a} deriving (Generic, Typeable, Show)
-newtype Prepending a = Prepending {_unPrepending :: a} deriving (Generic, Typeable, Show)
+newtype Appending a = Appending {_unAppending :: a} deriving (Generic, Show)
+newtype Prepending a = Prepending {_unPrepending :: a} deriving (Generic, Show)
 
 type instance Index (Appending o) = Index o
 type instance IxValue (Appending o) = IxValue o

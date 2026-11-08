@@ -24,7 +24,7 @@ import Test.QuickCheck
 -- families Index and Ixed associated with [a].
 newtype AssocList k a =
   AssocList {_pairs :: [(k, a)]}
-  deriving (Typeable, Generic, Show, Serialize, Functor, Read, Data)
+  deriving (Generic, Show, Serialize, Functor, Read, Data)
 
 instance Monoid (AssocList k a) where
   mappend = (<>)
@@ -68,7 +68,7 @@ instance FoldableWithIndex k (AssocList k) where
 instance FunctorWithIndex k (AssocList k) where
     imap f (AssocList prs) = AssocList (fmap (\(k, a) -> (k, f k a)) prs)
 
-instance Ord k => Traversable (AssocList k) where
+instance Traversable (AssocList k) where
   traverse f (AssocList prs) = AssocList <$> go prs
     where go ((k, a) : more) = (:) <$> ((k,) <$> f a) <*> go more
           go [] = pure []
@@ -76,7 +76,7 @@ instance Ord k => Traversable (AssocList k) where
 -- The TraversableWithIndex instance for [(k, a)] has an Int for the
 -- index and (k, a) for the values.  That is not what we want here,
 -- we want the index to be k and the value to be a.
-instance Ord k => TraversableWithIndex k (AssocList k) where
+instance TraversableWithIndex k (AssocList k) where
   itraverse f (AssocList prs) = AssocList <$> go prs
     where go ((k, a) : more) = (:) <$> ((k,) <$> f k a) <*> go more
           go [] = pure []

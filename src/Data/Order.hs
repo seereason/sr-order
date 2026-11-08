@@ -81,7 +81,7 @@ instance (Ord k, Typeable k, Typeable v, Arbitrary k, Arbitrary v) => Arbitrary 
       o <- arbitrary :: Gen (Order k v)
       InsertPosition o <$> choose (0, Foldable.length o)
 
-instance (Ordered o k v, Arbitrary (o v), Arbitrary k, Arbitrary v) => Arbitrary (ElementPosition o k v) where
+instance (Ordered o k v, Arbitrary (o v)) => Arbitrary (ElementPosition o k v) where
   arbitrary = do
       o <- arbitrary :: Gen (o v)
       case Foldable.length o of
