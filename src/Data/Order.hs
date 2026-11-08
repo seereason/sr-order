@@ -89,6 +89,7 @@ instance (Ordered o k v, Arbitrary (o v)) => Arbitrary (ElementPosition o k v) w
         n -> ElementPosition o <$> (Just <$> choose (0, pred n))
 
 #if !__GHCJS__ && !(defined(javascript_HOST_ARCH) || defined(wasm32_HOST_ARCH))
+
 tests :: IO ([Seconds], Result)
 tests = do
 #if __GHCJS__
