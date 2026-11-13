@@ -29,7 +29,7 @@ library
     cereal,
     containers,
     data-default,
-    extra >= 1.9,
+    extra >= 1.8.1,
     generic-lens,
     lens,
     ListLike,
@@ -54,7 +54,7 @@ test-suite order-tests
   ghc-options: -Wall -O
   hs-source-dirs: tests
   main-is: Main.hs
-  build-depends: base, containers, extra >= 1.9, HUnit, lens, mtl, QuickCheck, sr-order
+  build-depends: base, containers, extra >= 1.8.1, HUnit, lens, mtl, QuickCheck, sr-order
 
 source-repository head
   type:     git
